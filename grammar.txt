@@ -1,0 +1,283 @@
+grammar spk
+
+`from ast import literal_eval`
+
+ignore Space = /[ \t]+/
+ignore Comment = /#[^\r\n]*/
+ignore LineExtension = /\.\.\.[ \t\r\n]+/
+
+Pad = /[ \t\r\n]*/
+
+wrap(x) => Pad >> x << Pad
+
+# Allow "-" to appear in names. Use spaces around subtraction to disambiguate.
+Word = /[_a-zA-Z][_a-zA-Z0-9\-]*/
+
+# Parse a full word, then see if it matches our keyword. The point is to make
+# sure that we don't simply match the first part of a word. (For example, if
+# the input string is "notice", we wouldn't want to match the keyword "not".)
+kw(word) => Word where `lambda x: x == word`
+
+```
+keywords = [
+    'and',
+    'else',
+    'if',
+    'match',
+    'not',
+    'on',
+    'or',
+    'press',
+    'release',
+    'return',
+    'then',
+    'to',
+]
+```
+
+Name = Word where `lambda x: x not in keywords`
+
+start = wrap(Lines(Definition)) << ExpectNot(/./)
+
+
+# Top-level definitions.
+
+Definition = (
+    Assign
+    | Class
+    | Function
+    | Graph
+    | NodeDefinition
+)
+
+class Class {
+    name: kw("class") >> Opt(Name)
+    body: Block(Parameter)
+}
+
+class Function {
+    name: kw("function") >> Opt(Name)
+    parameters: ParenthesesList(Parameter)
+    returns: Opt(":" >> TypeExpression)
+    body: Block(Statement)
+}
+
+class Graph {
+    name: kw("graph") >> Opt(Name)
+    body: Block(Edges | Function | NodeDefinition)
+}
+
+class NodeDefinition {
+    orientation: Lines(kw("input") | kw("output")) |> `set`
+    name: Opt(kw("node")) >> Opt(Name)
+    body: Block(Function | Handler | State)
+}
+
+
+## Elements of a graph.
+
+Edges = kw("edges") >> Block(Edge)
+
+class Edge {
+    nodes: Sep(Word, ">>", allow_empty=False)
+}
+
+
+## Elements of a node.
+
+class Handler {
+    action: kw("on") >> Word
+    parameters: ParenthesesList(Parameter)
+    frequency: Opt("every" >> ValueExpression)
+    body: Block(Statement)
+}
+
+class State {
+    pass kw("state")
+    body: Block(Parameter)
+}
+
+
+## Statements.
+
+Statement = (
+    Assign
+    | Emit
+    | Forward
+    | Return
+    | ValueExpression
+)
+
+class Assign {
+    location: ValueExpression
+    operator: (
+        "="
+        | "+="
+        | "-="
+        | "*="
+        | "/="
+        | "%="
+        | "<<="
+        | ">>="
+        | "&="
+        | "^="
+        | "|="
+    )
+    value: ValueExpression
+}
+
+class Emit {
+    action: "press" | "release"
+    key: ValueExpression
+    target: Opt("to" >> ValueExpression)
+}
+
+class Forward {
+    key: ValueExpression
+    target: "to" >> ValueExpression
+}
+
+class Return {
+    value: kw("return") >> Opt(ValueExpression)
+}
+
+
+## Type-level expressions.
+
+# Just use the same syntax as for values.
+TypeExpression = ValueExpression
+
+
+## Value-level expressions.
+
+ValueExpression = (Name | LiteralExpression) between {
+    mixfix: "(" >> Pad >> ValueExpression << Pad << ")"
+    postfix: ArgumentList, ElementAccess, FieldAccess
+    prefix: "-"
+    left: "*", "/", "%"
+    left: "+", "-"
+    infix: wrap("<<"), wrap(">>")
+    infix: "<=", "<", ">=", ">"
+    infix: "==", "!="
+    left: "&"
+    left: "^"
+    left: wrap("|")
+    prefix: kw("not")
+    left: wrap(kw("and"))
+    left: wrap(kw("or"))
+    mixfix: If, Match
+}
+
+
+## Literal expressions.
+
+LiteralExpression = (
+    EmptyMapLiteral
+    | ListLiteral
+    | MapLiteral
+    | NumberLiteral
+    | SetLiteral
+    | StringLiteral
+    | TupleLiteral
+)
+
+class EmptyMapLiteral {
+    pass "{" >> Pad >> ":" << Pad << "}"
+}
+
+class ListLiteral {
+    elements: SquareList(ValueExpression)
+}
+
+class MapLiteral {
+    pairs: CurlyList(Pair)
+}
+
+class Pair {
+    key: ValueExpression
+    value: ":" >> ValueExpression
+}
+
+class NumberLiteral {
+    value: /\d+(\.\d*)?|\.\d+/
+}
+
+class SetLiteral {
+    elements: CurlyList(ValueExpression)
+}
+
+class StringLiteral {
+    contents: /"(?:[^\\"]|\\.)*"/ |> `literal_eval`
+}
+
+class TupleLiteral {
+    pass "("
+    elements: Sep(
+        ValueExpression,
+        Comma,
+        allow_trailer=true,
+        require_separator=true,
+    )
+    pass ")"
+}
+
+
+## Postfix operators.
+
+class ArgumentList {
+    arguments: ParenthesesList(ValueExpression)
+}
+
+class ElementAccess {
+    index: "[" >> Pad >> Expr << Pad << "]"
+}
+
+class FieldAccess {
+    field: "." >> Word
+}
+
+
+## Mixfix operators.
+
+class If {
+    condition: kw("if") >> ValueExpression
+    then_branch: Block(Statement)
+    else_branch: Opt(kw("else") >> Block(Statement))
+}
+
+class Match {
+    value: kw("match") >> ValueExpression
+    cases: Block(MatchCase)
+}
+
+class MatchCase {
+    pattern: kw("case") >> (ValueExpression | "*")
+    guard: Opt(kw("if") >> ValueExpression)
+    body: Block(Statement)
+}
+
+
+## Common structures.
+
+Block(T) => Pad >> "{" >> Pad >> (T /? LineSep) << Pad << "}"
+
+Comma = wrap(",")
+
+LineSep = /[\n\r]+/
+
+Lines(T) = (T /? LineSep)
+
+class Parameter {
+    name: Name
+    type: Opt(":" >> TypeExpression)
+    default: Opt("=" >> ValueExpression)
+}
+
+
+### List structures.
+
+SurroundedList(L, T, R) => L >> Pad >> (T /? Comma) << Pad << R
+
+CurlyList(T) => SurroundedList("{", T, "}")
+ParenthesesList(T) => SurroundedList("(", T, ")")
+SquareList(T) => SurroundedList("[", T, "]")
