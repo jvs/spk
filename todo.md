@@ -1,6 +1,6 @@
 # To Do
 
-- [ ] Design metaprogramming features
+- [ ] Implement translator to Python
 - [ ] Make sure the abstraction covers all the use cases
 - [ ] Compare to sm_td
 - [ ] Add packages and imports
@@ -9,6 +9,7 @@
 - [ ] Sugar for combos
 - [ ] Sugar for holding down a key: `hold "a" for 5 * seconds to port`
 - [ ] Sugar for emitting a string
+- [ ] Design metaprogramming features
 
 
 ## checks

@@ -50,12 +50,12 @@ Definition = (
     | Class
     | Function
     | Graph
-    | NodeDefinition
+    | Node
 )
 
 class Class {
     name: kw("class") >> Opt(Name)
-    body: Block(Parameter)
+    parameters: Block(Parameter)
 }
 
 class Function {
@@ -67,10 +67,10 @@ class Function {
 
 class Graph {
     name: kw("graph") >> Opt(Name)
-    body: Block(Edges | Function | NodeDefinition)
+    body: Block(Edges | Function | Node)
 }
 
-class NodeDefinition {
+class Node {
     orientation: Lines(kw("input") | kw("output")) |> `set`
     name: Opt(kw("node")) >> Opt(Name)
     body: Block(Function | Handler | State)
@@ -290,7 +290,7 @@ SquareList(T) => SurroundedList("[", T, "]")
 from collections import namedtuple as _nt
 from re import compile as _compile_re, IGNORECASE as _IGNORECASE
 
-class Node:
+class ParsedObject:
     _fields = ()
 
     def __init__(self):
@@ -369,14 +369,14 @@ class _Metadata:
         self._fields.update(other._fields)
 
 
-class Rule:
+class ParsingRule:
     def __init__(self, name, parse, definition):
         self.name = name
         self.parse = parse
         self.definition = definition
 
     def __repr__(self):
-        return (f'Rule(name={self.name!r}, parse={self.parse.__name__},'
+        return (f'ParsingRule(name={self.name!r}, parse={self.parse.__name__},'
             f' definition={self.definition!r})')
 
 
@@ -419,11 +419,11 @@ class PartialParseError(InputError):
         self.last_position = last_position
 
 
-class Infix(Node):
+class Infix(ParsedObject):
     _fields = ('left', 'operator', 'right')
 
     def __init__(self, left, operator, right):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.left = left
         self.operator = operator
         self.right = right
@@ -432,11 +432,11 @@ class Infix(Node):
         return f'Infix({self.left!r}, {self.operator!r}, {self.right!r})'
 
 
-class Postfix(Node):
+class Postfix(ParsedObject):
     _fields = ('left', 'operator')
 
     def __init__(self, left, operator):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.left = left
         self.operator = operator
 
@@ -444,11 +444,11 @@ class Postfix(Node):
         return f'Postfix({self.left!r}, {self.operator!r})'
 
 
-class Prefix(Node):
+class Prefix(ParsedObject):
     _fields = ('operator', 'right')
 
     def __init__(self, operator, right):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.operator = operator
         self.right = right
 
@@ -534,7 +534,7 @@ def visit(node):
         elif isinstance(node, dict):
             stack.extend(reversed(node.values()))
 
-        elif isinstance(node, Node):
+        elif isinstance(node, ParsedObject):
             node_id = id(node)
             if node_id in visited:
                 continue
@@ -584,7 +584,7 @@ def traverse(node):
                 for k, v in child.items()
             )
 
-        elif isinstance(child, Node) and hasattr(child, '_fields'):
+        elif isinstance(child, ParsedObject) and hasattr(child, '_fields'):
             extend(
                 _Traversing(
                     parent=child,
@@ -607,8 +607,8 @@ def transform(node, *callbacks):
 
             if node is not prev:
                 if (
-                    isinstance(prev, Node)
-                    and isinstance(node, Node)
+                    isinstance(prev, ParsedObject)
+                    and isinstance(node, ParsedObject)
                     and not node._metadata
                 ):
                     node._metadata.update(prev._metadata)
@@ -622,7 +622,7 @@ def _transform(node, callback):
     if isinstance(node, list):
         return [_transform(x, callback) for x in node]
 
-    if not isinstance(node, Node):
+    if not isinstance(node, ParsedObject):
         return node
 
     updates = {}
@@ -739,7 +739,7 @@ def _try_Space(_ctx, _text, _pos):
 def _parse_Space(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_Space, fullparse)
 
-Space = Rule('Space', _parse_Space, """
+Space = ParsingRule('Space', _parse_Space, """
     Space = /[ \\t]+/
 """)
 def _raise_error2(_text, _pos):
@@ -776,7 +776,7 @@ def _try_Comment(_ctx, _text, _pos):
 def _parse_Comment(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_Comment, fullparse)
 
-Comment = Rule('Comment', _parse_Comment, """
+Comment = ParsingRule('Comment', _parse_Comment, """
     Comment = /#[^\\r\\n]*/
 """)
 def _raise_error4(_text, _pos):
@@ -813,7 +813,7 @@ def _try_LineExtension(_ctx, _text, _pos):
 def _parse_LineExtension(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_LineExtension, fullparse)
 
-LineExtension = Rule('LineExtension', _parse_LineExtension, """
+LineExtension = ParsingRule('LineExtension', _parse_LineExtension, """
     LineExtension = /\\.\\.\\.[ \\t\\r\\n]+/
 """)
 def _raise_error6(_text, _pos):
@@ -850,7 +850,7 @@ def _try_Pad(_ctx, _text, _pos):
 def _parse_Pad(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_Pad, fullparse)
 
-Pad = Rule('Pad', _parse_Pad, """
+Pad = ParsingRule('Pad', _parse_Pad, """
     Pad = /[ \\t\\r\\n]*/
 """)
 def _raise_error8(_text, _pos):
@@ -902,7 +902,7 @@ def _try_wrap(_ctx, _text, _pos, x):
 def _parse_wrap(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_wrap, fullparse)
 
-wrap = Rule('wrap', _parse_wrap, """
+wrap = ParsingRule('wrap', _parse_wrap, """
     wrap(x) = (Pad >> x) << Pad
 """)
 def _try_Word(_ctx, _text, _pos):
@@ -923,7 +923,7 @@ def _try_Word(_ctx, _text, _pos):
 def _parse_Word(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_Word, fullparse)
 
-Word = Rule('Word', _parse_Word, """
+Word = ParsingRule('Word', _parse_Word, """
     Word = /[_a-zA-Z][_a-zA-Z0-9\\-]*/
 """)
 def _raise_error16(_text, _pos):
@@ -964,7 +964,7 @@ def _try_kw(_ctx, _text, _pos, word):
 def _parse_kw(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_kw, fullparse)
 
-kw = Rule('kw', _parse_kw, """
+kw = ParsingRule('kw', _parse_kw, """
     kw(word) = Word where `lambda x: x == word`
 """)
 def _raise_error18(_text, _pos):
@@ -1005,7 +1005,7 @@ def _try_Name(_ctx, _text, _pos):
 def _parse_Name(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_Name, fullparse)
 
-Name = Rule('Name', _parse_Name, """
+Name = ParsingRule('Name', _parse_Name, """
     Name = Word where `lambda x: x not in keywords`
 """)
 def _raise_error22(_text, _pos):
@@ -1086,7 +1086,7 @@ def _try_start(_ctx, _text, _pos):
 def _parse_start(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_start, fullparse)
 
-start = Rule('start', _parse_start, """
+start = ParsingRule('start', _parse_start, """
     start = _try__ignored >> (wrap(Lines(Definition)) << ExpectNot(/./))
 """)
 def _raise_error34(_text, _pos):
@@ -1169,7 +1169,7 @@ def _try_Definition(_ctx, _text, _pos):
         _pos = backtrack2
         # Option 5:
         # Begin Ref
-        (_status, _result, _pos) = (yield (3, _ctx._try_NodeDefinition, _pos))
+        (_status, _result, _pos) = (yield (3, _ctx._try_Node, _pos))
         # End Ref
         if _status:
             break
@@ -1185,8 +1185,8 @@ def _try_Definition(_ctx, _text, _pos):
 def _parse_Definition(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_Definition, fullparse)
 
-Definition = Rule('Definition', _parse_Definition, """
-    Definition = Assign | Class | Function | Graph | NodeDefinition
+Definition = ParsingRule('Definition', _parse_Definition, """
+    Definition = Assign | Class | Function | Graph | Node
 """)
 def _raise_error37(_text, _pos):
     if (len(_text) <= _pos):
@@ -1199,27 +1199,27 @@ def _raise_error37(_text, _pos):
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
     "Failed to parse the 'Definition' rule, at the expression:\n"
-    '    Assign | Class | Function | Graph | NodeDefinition\n\n'
+    '    Assign | Class | Function | Graph | Node\n\n'
     'Unexpected input'
     )
     raise ParseError((title + details), _pos, line, col)
 
-class Class(Node):
+class Class(ParsedObject):
     """
     class Class {
         name: kw('class') >> Opt(Name)
-        body: Block(Parameter)
+        parameters: Block(Parameter)
     }
     """
-    _fields = ('name', 'body')
+    _fields = ('name', 'parameters')
 
-    def __init__(self, name, body):
-        Node.__init__(self)
+    def __init__(self, name, parameters):
+        ParsedObject.__init__(self)
         self.name = name
-        self.body = body
+        self.parameters = parameters
 
     def __repr__(self):
-        return f'Class(name={self.name!r}, body={self.body!r})'
+        return f'Class(name={self.name!r}, parameters={self.parameters!r})'
 
     @staticmethod
     def parse(text, pos=0, fullparse=True):
@@ -1278,8 +1278,8 @@ def _try_Class(_ctx, _text, _pos):
         # End Call
         if not (_status):
             break
-        body = _result
-        _result = Class(name, body)
+        parameters = _result
+        _result = Class(name, parameters)
         _result._metadata.position_info = (start_pos1, _pos)
         break
     # End Seq
@@ -1301,7 +1301,7 @@ def _raise_error49(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class Function(Node):
+class Function(ParsedObject):
     """
     class Function {
         name: kw('function') >> Opt(Name)
@@ -1313,7 +1313,7 @@ class Function(Node):
     _fields = ('name', 'parameters', 'returns', 'body')
 
     def __init__(self, name, parameters, returns, body):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.name = name
         self.parameters = parameters
         self.returns = returns
@@ -1456,17 +1456,17 @@ def _raise_error72(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class Graph(Node):
+class Graph(ParsedObject):
     """
     class Graph {
         name: kw('graph') >> Opt(Name)
-        body: Block(Edges | Function | NodeDefinition)
+        body: Block(Edges | Function | Node)
     }
     """
     _fields = ('name', 'body')
 
     def __init__(self, name, body):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.name = name
         self.body = body
 
@@ -1519,7 +1519,7 @@ def _parse_function_90(_ctx, _text, _pos):
         _pos = backtrack7
         # Option 3:
         # Begin Ref
-        (_status, _result, _pos) = (yield (3, _ctx._try_NodeDefinition, _pos))
+        (_status, _result, _pos) = (yield (3, _ctx._try_Node, _pos))
         # End Ref
         if _status:
             break
@@ -1564,7 +1564,7 @@ def _try_Graph(_ctx, _text, _pos):
             break
         name = _result
         # Begin Call
-        # Block(Edges | Function | NodeDefinition)
+        # Block(Edges | Function | Node)
         func9 = _ParseFunction(_ctx._try_Block, (_parse_function_90,), ())
         (_status, _result, _pos) = (yield (3, func9, _pos))
         # End Call
@@ -1604,14 +1604,14 @@ def _raise_error90(_text, _pos):
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
     "Failed to parse the 'Graph' rule, at the expression:\n"
-    '    Edges | Function | NodeDefinition\n\n'
+    '    Edges | Function | Node\n\n'
     'Unexpected input'
     )
     raise ParseError((title + details), _pos, line, col)
 
-class NodeDefinition(Node):
+class Node(ParsedObject):
     """
-    class NodeDefinition {
+    class Node {
         orientation: Lines(kw('input') | kw('output')) |> `set`
         name: Opt(kw('node')) >> Opt(Name)
         body: Block(Function | Handler | State)
@@ -1620,17 +1620,17 @@ class NodeDefinition(Node):
     _fields = ('orientation', 'name', 'body')
 
     def __init__(self, orientation, name, body):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.orientation = orientation
         self.name = name
         self.body = body
 
     def __repr__(self):
-        return f'NodeDefinition(orientation={self.orientation!r}, name={self.name!r}, body={self.body!r})'
+        return f'Node(orientation={self.orientation!r}, name={self.name!r}, body={self.body!r})'
 
     @staticmethod
     def parse(text, pos=0, fullparse=True):
-        return _run(_ctx, text, pos, _ctx._try_NodeDefinition, fullparse)
+        return _run(_ctx, text, pos, _ctx._try_Node, fullparse)
 
 
 def _parse_function_103(_ctx, _text, _pos):
@@ -1751,7 +1751,7 @@ def _parse_function_119(_ctx, _text, _pos):
     # End Choice
     yield (_status, _result, _pos)
 
-def _try_NodeDefinition(_ctx, _text, _pos):
+def _try_Node(_ctx, _text, _pos):
     # Begin Seq
     start_pos4 = _pos
     while True:
@@ -1810,7 +1810,7 @@ def _try_NodeDefinition(_ctx, _text, _pos):
         if not (_status):
             break
         body = _result
-        _result = NodeDefinition(orientation, name, body)
+        _result = Node(orientation, name, body)
         _result._metadata.position_info = (start_pos4, _pos)
         break
     # End Seq
@@ -1826,7 +1826,7 @@ def _raise_error100(_text, _pos):
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
-    "Failed to parse the 'NodeDefinition' rule, at the expression:\n"
+    "Failed to parse the 'Node' rule, at the expression:\n"
     "    kw('input') | kw('output')\n\n"
     'Unexpected input'
     )
@@ -1842,7 +1842,7 @@ def _raise_error103(_text, _pos):
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
-    "Failed to parse the 'NodeDefinition' rule, at the expression:\n"
+    "Failed to parse the 'Node' rule, at the expression:\n"
     "    'input'\n\n"
     "Expected to match the string 'input'"
     )
@@ -1858,7 +1858,7 @@ def _raise_error106(_text, _pos):
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
-    "Failed to parse the 'NodeDefinition' rule, at the expression:\n"
+    "Failed to parse the 'Node' rule, at the expression:\n"
     "    'output'\n\n"
     "Expected to match the string 'output'"
     )
@@ -1874,7 +1874,7 @@ def _raise_error113(_text, _pos):
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
-    "Failed to parse the 'NodeDefinition' rule, at the expression:\n"
+    "Failed to parse the 'Node' rule, at the expression:\n"
     "    'node'\n\n"
     "Expected to match the string 'node'"
     )
@@ -1890,7 +1890,7 @@ def _raise_error119(_text, _pos):
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
-    "Failed to parse the 'NodeDefinition' rule, at the expression:\n"
+    "Failed to parse the 'Node' rule, at the expression:\n"
     '    Function | Handler | State\n\n'
     'Unexpected input'
     )
@@ -1935,7 +1935,7 @@ def _try_Edges(_ctx, _text, _pos):
 def _parse_Edges(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_Edges, fullparse)
 
-Edges = Rule('Edges', _parse_Edges, """
+Edges = ParsingRule('Edges', _parse_Edges, """
     Edges = kw('edges') >> Block(Edge)
 """)
 def _raise_error127(_text, _pos):
@@ -1954,7 +1954,7 @@ def _raise_error127(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class Edge(Node):
+class Edge(ParsedObject):
     """
     class Edge {
         nodes: Sep(Word, '>>', allow_trailer=False, allow_empty=False)
@@ -1963,7 +1963,7 @@ class Edge(Node):
     _fields = ('nodes',)
 
     def __init__(self, nodes):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.nodes = nodes
 
     def __repr__(self):
@@ -2033,7 +2033,7 @@ def _raise_error136(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class Handler(Node):
+class Handler(ParsedObject):
     """
     class Handler {
         action: kw('on') >> Word
@@ -2045,7 +2045,7 @@ class Handler(Node):
     _fields = ('action', 'parameters', 'frequency', 'body')
 
     def __init__(self, action, parameters, frequency, body):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.action = action
         self.parameters = parameters
         self.frequency = frequency
@@ -2180,7 +2180,7 @@ def _raise_error152(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class State(Node):
+class State(ParsedObject):
     """
     class State {
         pass kw('state')
@@ -2190,7 +2190,7 @@ class State(Node):
     _fields = ('body',)
 
     def __init__(self, body):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.body = body
 
     def __repr__(self):
@@ -2322,7 +2322,7 @@ def _try_Statement(_ctx, _text, _pos):
 def _parse_Statement(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_Statement, fullparse)
 
-Statement = Rule('Statement', _parse_Statement, """
+Statement = ParsingRule('Statement', _parse_Statement, """
     Statement = Assign | Emit | Forward | Return | ValueExpression
 """)
 def _raise_error169(_text, _pos):
@@ -2341,7 +2341,7 @@ def _raise_error169(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class Assign(Node):
+class Assign(ParsedObject):
     """
     class Assign {
         location: ValueExpression
@@ -2352,7 +2352,7 @@ class Assign(Node):
     _fields = ('location', 'operator', 'value')
 
     def __init__(self, location, operator, value):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.location = location
         self.operator = operator
         self.value = value
@@ -2744,7 +2744,7 @@ def _raise_error191(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class Emit(Node):
+class Emit(ParsedObject):
     """
     class Emit {
         action: 'press' | 'release'
@@ -2755,7 +2755,7 @@ class Emit(Node):
     _fields = ('action', 'key', 'target')
 
     def __init__(self, action, key, target):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.action = action
         self.key = key
         self.target = target
@@ -2917,7 +2917,7 @@ def _raise_error205(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class Forward(Node):
+class Forward(ParsedObject):
     """
     class Forward {
         key: ValueExpression
@@ -2927,7 +2927,7 @@ class Forward(Node):
     _fields = ('key', 'target')
 
     def __init__(self, key, target):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.key = key
         self.target = target
 
@@ -2995,7 +2995,7 @@ def _raise_error213(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class Return(Node):
+class Return(ParsedObject):
     """
     class Return {
         value: kw('return') >> Opt(ValueExpression)
@@ -3004,7 +3004,7 @@ class Return(Node):
     _fields = ('value',)
 
     def __init__(self, value):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.value = value
 
     def __repr__(self):
@@ -3092,7 +3092,7 @@ def _try_TypeExpression(_ctx, _text, _pos):
 def _parse_TypeExpression(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_TypeExpression, fullparse)
 
-TypeExpression = Rule('TypeExpression', _parse_TypeExpression, """
+TypeExpression = ParsingRule('TypeExpression', _parse_TypeExpression, """
     TypeExpression = ValueExpression
 """)
 def _parse_function_235(_ctx, _text, _pos):
@@ -3253,7 +3253,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
                 farthest_result1 = _result
                 farthest_position1 = _pos
                 has_result1 = True
-            elif 'not has_result1 and ((farthest_error_position1 < _pos))':
+            elif not has_result1 and ((farthest_error_position1 < _pos)):
                 farthest_error_position1 = _pos
                 farthest_error_result1 = _result
             _pos = backtrack16
@@ -3280,7 +3280,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
                 elif (farthest_position1 < _pos):
                     farthest_result1 = _result
                     farthest_position1 = _pos
-            elif 'not has_result1 and ((farthest_error_position1 < _pos))':
+            elif not has_result1 and ((farthest_error_position1 < _pos)):
                 farthest_error_position1 = _pos
                 farthest_error_result1 = _result
             if has_result1:
@@ -3333,7 +3333,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
             farthest_result2 = _result
             farthest_position2 = _pos
             has_result2 = True
-        elif 'not has_result2 and ((farthest_error_position2 < _pos))':
+        elif not has_result2 and ((farthest_error_position2 < _pos)):
             farthest_error_position2 = _pos
             farthest_error_result2 = _result
         _pos = backtrack17
@@ -3411,7 +3411,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
             elif (farthest_position2 < _pos):
                 farthest_result2 = _result
                 farthest_position2 = _pos
-        elif 'not has_result2 and ((farthest_error_position2 < _pos))':
+        elif not has_result2 and ((farthest_error_position2 < _pos)):
             farthest_error_position2 = _pos
             farthest_error_result2 = _result
         _pos = backtrack17
@@ -3451,7 +3451,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
             elif (farthest_position2 < _pos):
                 farthest_result2 = _result
                 farthest_position2 = _pos
-        elif 'not has_result2 and ((farthest_error_position2 < _pos))':
+        elif not has_result2 and ((farthest_error_position2 < _pos)):
             farthest_error_position2 = _pos
             farthest_error_result2 = _result
         if has_result2:
@@ -3597,7 +3597,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
             farthest_result3 = _result
             farthest_position3 = _pos
             has_result3 = True
-        elif 'not has_result3 and ((farthest_error_position3 < _pos))':
+        elif not has_result3 and ((farthest_error_position3 < _pos)):
             farthest_error_position3 = _pos
             farthest_error_result3 = _result
         _pos = backtrack21
@@ -3654,7 +3654,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
             elif (farthest_position3 < _pos):
                 farthest_result3 = _result
                 farthest_position3 = _pos
-        elif 'not has_result3 and ((farthest_error_position3 < _pos))':
+        elif not has_result3 and ((farthest_error_position3 < _pos)):
             farthest_error_position3 = _pos
             farthest_error_result3 = _result
         _pos = backtrack21
@@ -3708,7 +3708,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
             elif (farthest_position3 < _pos):
                 farthest_result3 = _result
                 farthest_position3 = _pos
-        elif 'not has_result3 and ((farthest_error_position3 < _pos))':
+        elif not has_result3 and ((farthest_error_position3 < _pos)):
             farthest_error_position3 = _pos
             farthest_error_result3 = _result
         _pos = backtrack21
@@ -3793,7 +3793,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
             elif (farthest_position3 < _pos):
                 farthest_result3 = _result
                 farthest_position3 = _pos
-        elif 'not has_result3 and ((farthest_error_position3 < _pos))':
+        elif not has_result3 and ((farthest_error_position3 < _pos)):
             farthest_error_position3 = _pos
             farthest_error_result3 = _result
         _pos = backtrack21
@@ -3850,7 +3850,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
             elif (farthest_position3 < _pos):
                 farthest_result3 = _result
                 farthest_position3 = _pos
-        elif 'not has_result3 and ((farthest_error_position3 < _pos))':
+        elif not has_result3 and ((farthest_error_position3 < _pos)):
             farthest_error_position3 = _pos
             farthest_error_result3 = _result
         _pos = backtrack21
@@ -3882,7 +3882,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
             elif (farthest_position3 < _pos):
                 farthest_result3 = _result
                 farthest_position3 = _pos
-        elif 'not has_result3 and ((farthest_error_position3 < _pos))':
+        elif not has_result3 and ((farthest_error_position3 < _pos)):
             farthest_error_position3 = _pos
             farthest_error_result3 = _result
         _pos = backtrack21
@@ -3914,7 +3914,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
             elif (farthest_position3 < _pos):
                 farthest_result3 = _result
                 farthest_position3 = _pos
-        elif 'not has_result3 and ((farthest_error_position3 < _pos))':
+        elif not has_result3 and ((farthest_error_position3 < _pos)):
             farthest_error_position3 = _pos
             farthest_error_result3 = _result
         _pos = backtrack21
@@ -3941,7 +3941,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
             elif (farthest_position3 < _pos):
                 farthest_result3 = _result
                 farthest_position3 = _pos
-        elif 'not has_result3 and ((farthest_error_position3 < _pos))':
+        elif not has_result3 and ((farthest_error_position3 < _pos)):
             farthest_error_position3 = _pos
             farthest_error_result3 = _result
         _pos = backtrack21
@@ -3967,7 +3967,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
             elif (farthest_position3 < _pos):
                 farthest_result3 = _result
                 farthest_position3 = _pos
-        elif 'not has_result3 and ((farthest_error_position3 < _pos))':
+        elif not has_result3 and ((farthest_error_position3 < _pos)):
             farthest_error_position3 = _pos
             farthest_error_result3 = _result
         _pos = backtrack21
@@ -3993,7 +3993,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
             elif (farthest_position3 < _pos):
                 farthest_result3 = _result
                 farthest_position3 = _pos
-        elif 'not has_result3 and ((farthest_error_position3 < _pos))':
+        elif not has_result3 and ((farthest_error_position3 < _pos)):
             farthest_error_position3 = _pos
             farthest_error_result3 = _result
         if has_result3:
@@ -4044,7 +4044,7 @@ def _try_ValueExpression(_ctx, _text, _pos):
 def _parse_ValueExpression(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_ValueExpression, fullparse)
 
-ValueExpression = Rule('ValueExpression', _parse_ValueExpression, """
+ValueExpression = ParsingRule('ValueExpression', _parse_ValueExpression, """
     ValueExpression = Name | LiteralExpression with operators {
         mixfix: ((('(' >> Pad) >> ValueExpression) << Pad) << ')'
         postfix: ArgumentList, ElementAccess, FieldAccess
@@ -4691,7 +4691,7 @@ def _try_LiteralExpression(_ctx, _text, _pos):
 def _parse_LiteralExpression(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_LiteralExpression, fullparse)
 
-LiteralExpression = Rule('LiteralExpression', _parse_LiteralExpression, """
+LiteralExpression = ParsingRule('LiteralExpression', _parse_LiteralExpression, """
     LiteralExpression = EmptyMapLiteral | ListLiteral | MapLiteral | NumberLiteral | SetLiteral | StringLiteral | TupleLiteral
 """)
 def _raise_error318(_text, _pos):
@@ -4710,7 +4710,7 @@ def _raise_error318(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class EmptyMapLiteral(Node):
+class EmptyMapLiteral(ParsedObject):
     """
     class EmptyMapLiteral {
         pass ((('{' >> Pad) >> ':') << Pad) << '}'
@@ -4719,7 +4719,7 @@ class EmptyMapLiteral(Node):
     _fields = ()
 
     def __init__(self):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
 
     def __repr__(self):
         return f'EmptyMapLiteral()'
@@ -4863,7 +4863,7 @@ def _raise_error337(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class ListLiteral(Node):
+class ListLiteral(ParsedObject):
     """
     class ListLiteral {
         elements: SquareList(ValueExpression)
@@ -4872,7 +4872,7 @@ class ListLiteral(Node):
     _fields = ('elements',)
 
     def __init__(self, elements):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.elements = elements
 
     def __repr__(self):
@@ -4901,7 +4901,7 @@ def _try_ListLiteral(_ctx, _text, _pos):
     # End Seq
     yield (_status, _result, _pos)
 
-class MapLiteral(Node):
+class MapLiteral(ParsedObject):
     """
     class MapLiteral {
         pairs: CurlyList(Pair)
@@ -4910,7 +4910,7 @@ class MapLiteral(Node):
     _fields = ('pairs',)
 
     def __init__(self, pairs):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.pairs = pairs
 
     def __repr__(self):
@@ -4939,7 +4939,7 @@ def _try_MapLiteral(_ctx, _text, _pos):
     # End Seq
     yield (_status, _result, _pos)
 
-class Pair(Node):
+class Pair(ParsedObject):
     """
     class Pair {
         key: ValueExpression
@@ -4949,7 +4949,7 @@ class Pair(Node):
     _fields = ('key', 'value')
 
     def __init__(self, key, value):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.key = key
         self.value = value
 
@@ -5017,7 +5017,7 @@ def _raise_error356(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class NumberLiteral(Node):
+class NumberLiteral(ParsedObject):
     """
     class NumberLiteral {
         value: /\\\\d+(\\\\.\\\\d*)?|\\\\.\\\\d+/
@@ -5026,7 +5026,7 @@ class NumberLiteral(Node):
     _fields = ('value',)
 
     def __init__(self, value):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.value = value
 
     def __repr__(self):
@@ -5077,7 +5077,7 @@ def _raise_error361(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class SetLiteral(Node):
+class SetLiteral(ParsedObject):
     """
     class SetLiteral {
         elements: CurlyList(ValueExpression)
@@ -5086,7 +5086,7 @@ class SetLiteral(Node):
     _fields = ('elements',)
 
     def __init__(self, elements):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.elements = elements
 
     def __repr__(self):
@@ -5115,7 +5115,7 @@ def _try_SetLiteral(_ctx, _text, _pos):
     # End Seq
     yield (_status, _result, _pos)
 
-class StringLiteral(Node):
+class StringLiteral(ParsedObject):
     """
     class StringLiteral {
         contents: /"(?:[^\\\\\\\\"]|\\\\\\\\.)*"/ |> `literal_eval`
@@ -5124,7 +5124,7 @@ class StringLiteral(Node):
     _fields = ('contents',)
 
     def __init__(self, contents):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.contents = contents
 
     def __repr__(self):
@@ -5183,7 +5183,7 @@ def _raise_error372(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class TupleLiteral(Node):
+class TupleLiteral(ParsedObject):
     """
     class TupleLiteral {
         pass '('
@@ -5194,7 +5194,7 @@ class TupleLiteral(Node):
     _fields = ('elements',)
 
     def __init__(self, elements):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.elements = elements
 
     def __repr__(self):
@@ -5303,7 +5303,7 @@ def _raise_error385(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class ArgumentList(Node):
+class ArgumentList(ParsedObject):
     """
     class ArgumentList {
         arguments: ParenthesesList(ValueExpression)
@@ -5312,7 +5312,7 @@ class ArgumentList(Node):
     _fields = ('arguments',)
 
     def __init__(self, arguments):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.arguments = arguments
 
     def __repr__(self):
@@ -5341,7 +5341,7 @@ def _try_ArgumentList(_ctx, _text, _pos):
     # End Seq
     yield (_status, _result, _pos)
 
-class ElementAccess(Node):
+class ElementAccess(ParsedObject):
     """
     class ElementAccess {
         index: ((('[' >> Pad) >> Expr) << Pad) << ']'
@@ -5350,7 +5350,7 @@ class ElementAccess(Node):
     _fields = ('index',)
 
     def __init__(self, index):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.index = index
 
     def __repr__(self):
@@ -5471,7 +5471,7 @@ def _raise_error403(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class FieldAccess(Node):
+class FieldAccess(ParsedObject):
     """
     class FieldAccess {
         field: '.' >> Word
@@ -5480,7 +5480,7 @@ class FieldAccess(Node):
     _fields = ('field',)
 
     def __init__(self, field):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.field = field
 
     def __repr__(self):
@@ -5541,7 +5541,7 @@ def _raise_error408(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class If(Node):
+class If(ParsedObject):
     """
     class If {
         condition: kw('if') >> ValueExpression
@@ -5552,7 +5552,7 @@ class If(Node):
     _fields = ('condition', 'then_branch', 'else_branch')
 
     def __init__(self, condition, then_branch, else_branch):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.condition = condition
         self.then_branch = then_branch
         self.else_branch = else_branch
@@ -5689,7 +5689,7 @@ def _raise_error427(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class Match(Node):
+class Match(ParsedObject):
     """
     class Match {
         value: kw('match') >> ValueExpression
@@ -5699,7 +5699,7 @@ class Match(Node):
     _fields = ('value', 'cases')
 
     def __init__(self, value, cases):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.value = value
         self.cases = cases
 
@@ -5778,7 +5778,7 @@ def _raise_error437(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-class MatchCase(Node):
+class MatchCase(ParsedObject):
     """
     class MatchCase {
         pattern: kw('case') >> (ValueExpression | '*')
@@ -5789,7 +5789,7 @@ class MatchCase(Node):
     _fields = ('pattern', 'guard', 'body')
 
     def __init__(self, pattern, guard, body):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.pattern = pattern
         self.guard = guard
         self.body = body
@@ -6086,7 +6086,7 @@ def _try_Block(_ctx, _text, _pos, T):
 def _parse_Block(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_Block, fullparse)
 
-Block = Rule('Block', _parse_Block, """
+Block = ParsingRule('Block', _parse_Block, """
     Block(T) = ((((Pad >> '{') >> Pad) >> (T /? LineSep)) << Pad) << '}'
 """)
 def _raise_error471(_text, _pos):
@@ -6148,7 +6148,7 @@ def _try_Comma(_ctx, _text, _pos):
 def _parse_Comma(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_Comma, fullparse)
 
-Comma = Rule('Comma', _parse_Comma, """
+Comma = ParsingRule('Comma', _parse_Comma, """
     Comma = wrap(',')
 """)
 def _raise_error481(_text, _pos):
@@ -6185,7 +6185,7 @@ def _try_LineSep(_ctx, _text, _pos):
 def _parse_LineSep(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_LineSep, fullparse)
 
-LineSep = Rule('LineSep', _parse_LineSep, """
+LineSep = ParsingRule('LineSep', _parse_LineSep, """
     LineSep = /[\\n\\r]+/
 """)
 def _raise_error483(_text, _pos):
@@ -6233,10 +6233,10 @@ def _try_Lines(_ctx, _text, _pos, T):
 def _parse_Lines(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_Lines, fullparse)
 
-Lines = Rule('Lines', _parse_Lines, """
+Lines = ParsingRule('Lines', _parse_Lines, """
     Lines(T) = T /? LineSep
 """)
-class Parameter(Node):
+class Parameter(ParsedObject):
     """
     class Parameter {
         name: Name
@@ -6247,7 +6247,7 @@ class Parameter(Node):
     _fields = ('name', 'type', 'default')
 
     def __init__(self, name, type, default):
-        Node.__init__(self)
+        ParsedObject.__init__(self)
         self.name = name
         self.type = type
         self.default = default
@@ -6443,7 +6443,7 @@ def _try_SurroundedList(_ctx, _text, _pos, L, T, R):
 def _parse_SurroundedList(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_SurroundedList, fullparse)
 
-SurroundedList = Rule('SurroundedList', _parse_SurroundedList, """
+SurroundedList = ParsingRule('SurroundedList', _parse_SurroundedList, """
     SurroundedList(L, T, R) = (((L >> Pad) >> (T /? Comma)) << Pad) << R
 """)
 def _parse_function_517(_ctx, _text, _pos):
@@ -6488,7 +6488,7 @@ def _try_CurlyList(_ctx, _text, _pos, T):
 def _parse_CurlyList(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_CurlyList, fullparse)
 
-CurlyList = Rule('CurlyList', _parse_CurlyList, """
+CurlyList = ParsingRule('CurlyList', _parse_CurlyList, """
     CurlyList(T) = SurroundedList('{', T, '}')
 """)
 def _raise_error517(_text, _pos):
@@ -6565,7 +6565,7 @@ def _try_ParenthesesList(_ctx, _text, _pos, T):
 def _parse_ParenthesesList(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_ParenthesesList, fullparse)
 
-ParenthesesList = Rule('ParenthesesList', _parse_ParenthesesList, """
+ParenthesesList = ParsingRule('ParenthesesList', _parse_ParenthesesList, """
     ParenthesesList(T) = SurroundedList('(', T, ')')
 """)
 def _raise_error523(_text, _pos):
@@ -6642,7 +6642,7 @@ def _try_SquareList(_ctx, _text, _pos, T):
 def _parse_SquareList(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try_SquareList, fullparse)
 
-SquareList = Rule('SquareList', _parse_SquareList, """
+SquareList = ParsingRule('SquareList', _parse_SquareList, """
     SquareList(T) = SurroundedList('[', T, ']')
 """)
 def _raise_error529(_text, _pos):
@@ -6713,7 +6713,7 @@ def _try__ignored(_ctx, _text, _pos):
 def _parse__ignored(text, pos=0, fullparse=True):
     return _run(_ctx, text, pos, _try__ignored, fullparse)
 
-_ignored = Rule('_ignored', _parse__ignored, """
+_ignored = ParsingRule('_ignored', _parse__ignored, """
     _ignored = Skip(Space, Comment, LineExtension)
 """)
 _ctx = _Context()
@@ -6731,7 +6731,7 @@ _ctx._try_Definition = _try_Definition
 _ctx._try_Class = _try_Class
 _ctx._try_Function = _try_Function
 _ctx._try_Graph = _try_Graph
-_ctx._try_NodeDefinition = _try_NodeDefinition
+_ctx._try_Node = _try_Node
 _ctx._try_Edges = _try_Edges
 _ctx._try_Edge = _try_Edge
 _ctx._try_Handler = _try_Handler

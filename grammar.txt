@@ -47,12 +47,12 @@ Definition = (
     | Class
     | Function
     | Graph
-    | NodeDefinition
+    | Node
 )
 
 class Class {
     name: kw("class") >> Opt(Name)
-    body: Block(Parameter)
+    parameters: Block(Parameter)
 }
 
 class Function {
@@ -64,13 +64,13 @@ class Function {
 
 class Graph {
     name: kw("graph") >> Opt(Name)
-    body: Block(Edges | Function | NodeDefinition)
+    body: Block(Edges | Function | Node)
 }
 
-class NodeDefinition {
+class Node {
     orientation: Lines(kw("input") | kw("output")) |> `set`
     name: Opt(kw("node")) >> Opt(Name)
-    body: Block(Function | Handler | State)
+    body: Block(Assign | Function | Handler | State)
 }
 
 
