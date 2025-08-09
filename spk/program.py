@@ -11,9 +11,7 @@ class Environment:
 
     def bind(self, name, value) -> None:
         if name in self.bindings:
-            self.reporter.error(
-                errors.DuplicateDefinitions(name, self.bindings[name], value)
-            )
+            self.reporter.error(errors.DuplicateDefinitions(name, self.bindings[name], value))
 
         self.bindings[name] = value
 
