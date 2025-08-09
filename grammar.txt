@@ -37,18 +37,12 @@ keywords = [
 
 Name = Word where `lambda x: x not in keywords`
 
-start = wrap(Lines(Definition)) << ExpectNot(/./)
+start = wrap(Lines(Assign | Definition)) << ExpectNot(/./)
 
 
 # Top-level definitions.
 
-Definition = (
-    Assign
-    | Class
-    | Function
-    | Graph
-    | Node
-)
+Definition = Class | Function | Graph | Node
 
 class Class {
     name: kw("class") >> Opt(Name)
@@ -123,7 +117,7 @@ class Assign {
         | "^="
         | "|="
     )
-    value: ValueExpression
+    value: Definition | ValueExpression
 }
 
 class Emit {
@@ -151,7 +145,7 @@ TypeExpression = ValueExpression
 ## Value-level expressions.
 
 ValueExpression = (Name | LiteralExpression) between {
-    mixfix: "(" >> Pad >> ValueExpression << Pad << ")"
+    mixfix: "(" >> wrap(ValueExpression) << ")"
     postfix: ArgumentList, ElementAccess, FieldAccess
     prefix: "-"
     left: "*", "/", "%"
@@ -182,7 +176,7 @@ LiteralExpression = (
 )
 
 class EmptyMapLiteral {
-    pass "{" >> Pad >> ":" << Pad << "}"
+    pass "{" >> wrap(":") << "}"
 }
 
 class ListLiteral {
@@ -212,12 +206,12 @@ class StringLiteral {
 
 class TupleLiteral {
     pass "("
-    elements: Sep(
+    elements: wrap(Sep(
         ValueExpression,
         Comma,
         allow_trailer=true,
         require_separator=true,
-    )
+    ))
     pass ")"
 }
 
@@ -229,7 +223,7 @@ class ArgumentList {
 }
 
 class ElementAccess {
-    index: "[" >> Pad >> Expr << Pad << "]"
+    index: "[" >> wrap(Expr) << "]"
 }
 
 class FieldAccess {
@@ -259,7 +253,7 @@ class MatchCase {
 
 ## Common structures.
 
-Block(T) => Pad >> "{" >> Pad >> (T /? LineSep) << Pad << "}"
+Block(T) => Pad >> "{" >> wrap(T /? LineSep) << "}"
 
 Comma = wrap(",")
 
@@ -276,7 +270,7 @@ class Parameter {
 
 ### List structures.
 
-SurroundedList(L, T, R) => L >> Pad >> (T /? Comma) << Pad << R
+SurroundedList(L, T, R) => L >> wrap(T /? Comma) << R
 
 CurlyList(T) => SurroundedList("{", T, "}")
 ParenthesesList(T) => SurroundedList("(", T, ")")

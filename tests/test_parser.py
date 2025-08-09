@@ -1,6 +1,45 @@
 from spk import parser
 
 
+def test_tuple_literals():
+    program = """
+        w = (foo, bar, baz)
+        x = (fizz, buzz)
+        y = (zim,)
+        z = ()
+    """
+    src = parser.parse(program)
+    assert src and isinstance(src, list) and len(src) == 4
+    assert all(isinstance(i, parser.Assign) for i in src)
+    assert all(isinstance(i.value, parser.TupleLiteral) for i in src)
+
+    w, x, y, z = [i.value.elements for i in src]
+    assert w == ['foo', 'bar', 'baz']
+    assert x == ['fizz', 'buzz']
+    assert y == ['zim']
+    assert z == []
+
+
+def test_nested_tuple_literals():
+    program = """
+        x = ((),)
+        y = (((),),)
+        z = (())
+    """
+    src = parser.parse(program)
+    assert src and isinstance(src, list) and len(src) == 3
+    assert all(isinstance(i, parser.Assign) for i in src)
+    assert all(isinstance(i.value, parser.TupleLiteral) for i in src)
+
+    Tuple = parser.TupleLiteral
+    empty = Tuple(elements=[])
+
+    x, y, z = [i.value.elements for i in src]
+    assert x == [empty]
+    assert y == [Tuple(elements=[empty])]
+    assert z == []
+
+
 def test_debug_program():
     program = """
         graph test-graph {
@@ -51,7 +90,7 @@ def test_debug_program():
     assert len(graph.body) == 2
 
     node, edges = graph.body
-    assert isinstance(node, parser.NodeDefinition)
+    assert isinstance(node, parser.Node)
     assert node.name == 'my_node'
     assert len(edges) == 1
     assert edges[0].nodes == ['input', 'my_node', 'output']
