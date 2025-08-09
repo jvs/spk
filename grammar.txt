@@ -83,6 +83,7 @@ class Handler {
     action: kw("on") >> Word
     parameters: ParenthesesList(Parameter)
     frequency: Opt("every" >> ValueExpression)
+    guard: Opt(kw("if") >> ValueExpression)
     body: Block(Statement)
 }
 
