@@ -19,13 +19,13 @@ source code as character sequences surrounded by double-quotes (like strings in
 other programming languages).
 - **Key**: a `Symbol` for a key on a keyboard.
 - **Event**: a key press, key release, or clock tick event.
-- **Set\[T\]**: a generic set of elements of the same type.
-- **List\[T\]**: a generic list of elements of the same type.
-- **Map\[K, V\]**: a generic array of elements of the same type.
-- **Tuple\[I, J, K, ...\]**: a tuple of elements of potentially different types.
+- **Set<T>**: a generic set of elements of the same type.
+- **List<T>**: a generic list of elements of the same type.
+- **Map<K, V>**: a generic map of key-value pairs.
+- **Tuple<I, J, K, ...>**: a tuple of elements of potentially different types.
 - **Node**: a stream processing node.
 - **Graph**: a graph of stream processing nodes.
-- **Function\[Tuple\[A, B, C\], R\]**: a function that takes arugments of types
+- **Function<Tuple<A, B, C>, R>**: a function that takes arugments of types
 A, B, and C and returns a value of type R.
 
 
@@ -369,7 +369,7 @@ For example,
 
 ```
 class Combo {
-    input_keys: Set[Key]
+    input_keys: Set<Key>
     output_key: Key
 }
 ```
@@ -668,10 +668,10 @@ node Debouncer {
 
     state {
         # Keep a map of key to the last time it was pressed.
-        last_pressed: Map[Key, Time] = {:}
+        last_pressed: Map<Key, Time> = {:}
 
         # Keep a set of the currently pressed keys, to prevent double-releases.
-        is_pressed: Set[Key] = {}
+        is_pressed: Set<Key> = {}
     }
 
     on press(event) {
@@ -698,7 +698,7 @@ node Debouncer {
 ```
 # Each combo is represented as a set of input keys and a final output key.
 class Combo {
-    input: Set[Key]
+    input: Set<Key>
     output: Key
 }
 
@@ -722,7 +722,7 @@ node ComboEngine {
 
     state {
         # Track which keys are currently pressed and when
-        pressed: Map[Key, Time] = {:}
+        pressed: Map<Key, Time> = {:}
 
         # Buffer of pending events that might be part of a combo
         buffer = []
@@ -856,8 +856,8 @@ node ComboEngine {
 ```
 # Each chord is represented as a set of input keys and a list of output keys.
 class Chord {
-    input: Set[Key]
-    output: List[Key]
+    input: Set<Key>
+    output: List<Key>
 }
 
 
@@ -874,7 +874,7 @@ node ChordingEngine {
 
     state {
         # Track currently pressed keys that might be part of a chord
-        pressed_keys: Set[Key] = {}
+        pressed_keys: Set<Key> = {}
 
         # Buffer to track release events
         release_buffer = []
@@ -883,7 +883,7 @@ node ChordingEngine {
         first_release_time = 0
 
         # Keys we've already processed (to avoid double-processing)
-        processed: Set[Key] = {}
+        processed: Set<Key> = {}
     }
 
     on press(event) {
@@ -1016,8 +1016,8 @@ node ChordingEngine {
 
 ```
 class LeaderSequence {
-    input: List[Key]
-    output: List[Key]
+    input: List<Key>
+    output: List<Key>
 }
 
 class LeaderKey {

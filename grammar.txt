@@ -6,7 +6,11 @@ ignore Space = /[ \t]+/
 ignore Comment = /#[^\r\n]*/
 ignore LineExtension = /\.\.\.[ \t\r\n]+/
 
-Pad = /[ \t\r\n]*/
+CheckedSpace = Backtrack(1) >> Space
+ForbiddenSpace(x) = ExpectNot(CheckedSpace) >> x
+RequiredSpace(x) = CheckedSpace >> x << CheckedSpace
+
+Pad = /[ \t\r\n]+/*
 
 wrap(x) => Pad >> (x) << Pad
 
@@ -188,12 +192,12 @@ TypeExpression = ValueExpression
 
 ValueExpression = (Name | LiteralExpression) between {
     mixfix: "(" >> wrap(ValueExpression) << ")"
-    postfix: ArgumentList, ElementAccess, FieldAccess
+    postfix: ArgumentList, ElementAccess, FieldAccess, GenericArgumentList
     prefix: "-"
     left: "*", "/", "%"
     left: "+", "-"
     infix: wrap("<<"), wrap(">>")
-    infix: "<=", "<", ">=", ">"
+    infix: "<=", ">=", RequiredSpace("<" | ">")
     infix: "==", "!="
     left: "&"
     left: "^"
@@ -261,13 +265,25 @@ class TupleLiteral {
 ## Postfix operators.
 
 class ArgumentList {
-    arguments: ParenthesesList(ValueExpression | KeywordArugment)
+    arguments: ParenthesesList(ValueExpression | KeywordArgument)
 }
 
-class KeywordArugment {
+class GenericArgumentList {
+    arguments: ForbiddenSpace("<") >> (GenericArgument /? Comma) << ForbiddenSpace(">")
+}
+
+GenericArgument = KeywordTypeArgument | TypeExpression
+
+class KeywordArgument {
     name: Word
     pass "="
     value: ValueExpression
+}
+
+class KeywordTypeArgument {
+    name: Word
+    pass "="
+    value: TypeExpression
 }
 
 class ElementAccess {
@@ -309,7 +325,7 @@ Block(T) => Pad >> "{" >> Pad >> (T /? LineSep) << Pad << "}"
 
 Comma = wrap(",")
 
-LineSep = /[\n\r]+/
+LineSep = /[\n\r]+/+
 
 Lines(T) = (T /? LineSep)
 

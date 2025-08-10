@@ -53,7 +53,7 @@ def test_simple_node():
     assert src
 
 
-def test_debug_program():
+def test_program_with_many_literals():
     program = """
         graph test-graph {
             node my-node {
@@ -107,3 +107,55 @@ def test_debug_program():
     assert node.name == 'my-node'
     assert len(edges.body) == 1
     assert edges.body[0].nodes == ['input', 'my-node', 'output']
+
+
+def test_node_with_generic_types():
+    program = """
+        node Debouncer {
+            config {
+                debounce_delay: Duration = 50 * ms
+            }
+
+            state {
+                # Keep a map of key to the last time it was pressed.
+                last_pressed: Map<Key, Time> = {:}
+
+                # Keep a set of the currently pressed keys, to prevent double-releases.
+                is_pressed: Set<Key> = {}
+            }
+
+            on press(event) {
+                last_time = state.last_pressed.get(event.key, 0)
+
+                if event.time - last_time > config.debounce_delay {
+                    state.last_pressed[event.key] = event.time
+                    state.is_pressed << event.key
+                    press event.key
+                }
+            }
+
+            on release(event) {
+                if state.is_pressed.contains(event.key) {
+                    state.is_pressed.remove(event.key)
+                    release event.key
+                }
+            }
+        }
+    """
+    src = parser.parse(program)
+    assert src and isinstance(src, list) and len(src) == 1
+    debouncer = src[0]
+    assert debouncer.name == 'Debouncer'
+    config = debouncer.body[0]
+    state = debouncer.body[1]
+
+    debounce_delay = config.body[0]
+    assert debounce_delay.name == 'debounce_delay'
+    assert debounce_delay.type == 'Duration'
+
+    last_pressed = state.body[0]
+    assert last_pressed.name == 'last_pressed'
+    assert last_pressed.type == parser.Postfix(
+        'Map',
+        parser.GenericArgumentList(['Key', 'Time']),
+    )
