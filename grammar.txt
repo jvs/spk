@@ -8,7 +8,7 @@ ignore LineExtension = /\.\.\.[ \t\r\n]+/
 
 Pad = /[ \t\r\n]*/
 
-wrap(x) => Pad >> x << Pad
+wrap(x) => Pad >> (x) << Pad
 
 # Allow "-" to appear in names. Use spaces around subtraction to disambiguate.
 Word = /[_a-zA-Z][_a-zA-Z0-9\-]*/
@@ -22,6 +22,7 @@ kw(word) => Word where `lambda x: x == word`
 keywords = [
     'and',
     'else',
+    'forward',
     'if',
     'match',
     'not',
@@ -37,7 +38,7 @@ keywords = [
 
 Name = Word where `lambda x: x not in keywords`
 
-start = wrap(Lines(Assign | Definition)) << ExpectNot(/./)
+start = wrap(Lines(Assign | Definition | Template)) << ExpectNot(/./)
 
 
 # Top-level definitions.
@@ -45,50 +46,78 @@ start = wrap(Lines(Assign | Definition)) << ExpectNot(/./)
 Definition = Class | Function | Graph | Node
 
 class Class {
-    name: kw("class") >> Opt(Name)
+    pass kw("class")
+    name: Opt(Name)
     parameters: Block(Parameter)
 }
 
 class Function {
-    name: kw("function") >> Opt(Name)
+    pass kw("function")
+    name: Opt(Name)
     parameters: ParenthesesList(Parameter)
     returns: Opt(":" >> TypeExpression)
     body: Block(Statement)
 }
 
 class Graph {
-    name: kw("graph") >> Opt(Name)
-    body: Block(Edges | Function | Node)
+    pass kw("graph")
+    name: Opt(Name)
+    body: Block(Assign | Config | Edges | Function | Node | State)
 }
 
 class Node {
-    orientation: Lines(kw("input") | kw("output")) |> `set`
-    name: Opt(kw("node")) >> Opt(Name)
-    body: Block(Assign | Function | Handler | State)
+    pass kw("node")
+    name: Opt(Name)
+    body: Block(Assign | Config | Function | Handler | State)
 }
+
+class Template {
+    pass kw("template")
+    name: Name
+    parameters: ParenthesesList(Parameter)
+    returns: Opt(":" >> TypeExpression)
+    body: Block(Statement)
+}
+
+AnonymousDefinition = Definition where `lambda x: x.name is None`
 
 
 ## Elements of a graph.
 
-Edges = kw("edges") >> Block(Edge)
+class Edges {
+    pass kw("edges")
+    body: Block(ConditionalEdges | Edge)
+}
+
+class ConditionalEdges {
+    pass kw("if")
+    condition: ValueExpression
+    body: Block(ConditionalEdges | Edge)
+}
 
 class Edge {
-    nodes: Sep(Word, ">>", allow_empty=False)
+    nodes: Sep(Word, wrap(">>"), allow_empty=False)
 }
 
 
 ## Elements of a node.
 
+class Config {
+    pass kw("config")
+    name: Opt(Name)
+    body: Block(Parameter)
+}
+
 class Handler {
-    action: kw("on") >> Word
+    pass kw("on")
+    action: Word
     parameters: ParenthesesList(Parameter)
-    frequency: Opt("every" >> ValueExpression)
-    guard: Opt(kw("if") >> ValueExpression)
     body: Block(Statement)
 }
 
 class State {
     pass kw("state")
+    name: Opt(Name)
     body: Block(Parameter)
 }
 
@@ -98,13 +127,14 @@ class State {
 Statement = (
     Assign
     | Emit
+    | For
     | Forward
     | Return
     | ValueExpression
 )
 
 class Assign {
-    location: ValueExpression
+    storage: ValueExpression | Names
     operator: (
         "="
         | "+="
@@ -118,7 +148,7 @@ class Assign {
         | "^="
         | "|="
     )
-    value: Definition | ValueExpression
+    value: AnonymousDefinition | ValueExpression
 }
 
 class Emit {
@@ -127,13 +157,24 @@ class Emit {
     target: Opt("to" >> ValueExpression)
 }
 
+class For {
+    pass kw("for")
+    names: Names
+    pass kw("in")
+    source: ValueExpression
+    guard: Opt(Pad >> kw("if") >> ValueExpression)
+    body: Block(Statement)
+}
+
 class Forward {
+    pass Opt("forward")
     key: ValueExpression
     target: "to" >> ValueExpression
 }
 
 class Return {
-    value: kw("return") >> Opt(ValueExpression)
+    pass kw("return")
+    value: Opt(ValueExpression)
 }
 
 
@@ -172,7 +213,7 @@ LiteralExpression = (
     | MapLiteral
     | NumberLiteral
     | SetLiteral
-    | StringLiteral
+    | SymbolLiteral
     | TupleLiteral
 )
 
@@ -201,7 +242,7 @@ class SetLiteral {
     elements: CurlyList(ValueExpression)
 }
 
-class StringLiteral {
+class SymbolLiteral {
     contents: /"(?:[^\\"]|\\.)*"/ |> `literal_eval`
 }
 
@@ -220,11 +261,17 @@ class TupleLiteral {
 ## Postfix operators.
 
 class ArgumentList {
-    arguments: ParenthesesList(ValueExpression)
+    arguments: ParenthesesList(ValueExpression | KeywordArugment)
+}
+
+class KeywordArugment {
+    name: Word
+    pass "="
+    value: ValueExpression
 }
 
 class ElementAccess {
-    index: "[" >> wrap(Expr) << "]"
+    indexes: SquareList(ValueExpression)
 }
 
 class FieldAccess {
@@ -235,18 +282,21 @@ class FieldAccess {
 ## Mixfix operators.
 
 class If {
-    condition: kw("if") >> ValueExpression
+    pass kw("if")
+    condition: ValueExpression
     then_branch: Block(Statement)
     else_branch: Opt(kw("else") >> Block(Statement))
 }
 
 class Match {
-    value: kw("match") >> ValueExpression
+    pass kw("match")
+    value: ValueExpression
     cases: Block(MatchCase)
 }
 
 class MatchCase {
-    pattern: kw("case") >> (ValueExpression | "*")
+    pass kw("case")
+    pattern: Opt(ValueExpression | "*")
     guard: Opt(kw("if") >> ValueExpression)
     body: Block(Statement)
 }
@@ -254,7 +304,8 @@ class MatchCase {
 
 ## Common structures.
 
-Block(T) => Pad >> "{" >> wrap(T /? LineSep) << "}"
+# TODO: Figure out why "wrap" doesn't work here.
+Block(T) => Pad >> "{" >> Pad >> (T /? LineSep) << Pad << "}"
 
 Comma = wrap(",")
 
@@ -268,10 +319,13 @@ class Parameter {
     default: Opt("=" >> ValueExpression)
 }
 
+Names = (Name /? Comma) | ParenthesesList(Name)
+
 
 ### List structures.
 
-SurroundedList(L, T, R) => L >> wrap(T /? Comma) << R
+# TODO: Figure out why "wrap" doesn't work here.
+SurroundedList(L, T, R) => L >> Pad >> (T /? Comma) << Pad << R
 
 CurlyList(T) => SurroundedList("{", T, "}")
 ParenthesesList(T) => SurroundedList("(", T, ")")

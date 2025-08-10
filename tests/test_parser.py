@@ -40,43 +40,56 @@ def test_nested_tuple_literals():
     assert z == []
 
 
+def test_simple_node():
+    program = """
+        node ComboComposerV1 {
+            state {
+                mode = "idle"
+                keys = {}
+            }
+        }
+    """
+    src = parser.parse(program)
+    assert src
+
+
 def test_debug_program():
     program = """
         graph test-graph {
-            node my_node {
+            node my-node {
                 state {
-                    is_pressed = false
+                    is-pressed = false
                     deadline = 0 * ms
-                    variable_name = initial_value
+                    variable-name = initial-value
                     counter = 0
-                    pressed_keys = {}
-                    key_map = {
-                        "a": "action_a",
-                        "b": "action_b",
-                        "c": "action_c",
+                    pressed-keys = {}
+                    key-map = {
+                        "a": "action-a",
+                        "b": "action-b",
+                        "c": "action-c",
                     }
-                    empty_map = {:}
-                    nonempty_set = {1, 2, 3}
-                    some_list = [1, 2, 3]
+                    empty-map = {:}
+                    nonempty-set = {1, 2, 3}
+                    some-list = [1, 2, 3]
                 }
 
                 on key(event) {
                     press "a"
-                    is_pressed = true
+                    is-pressed = true
                     deadline = event.time + 1000 * ms
                 }
 
-                on tick(event) every 1 * ms {
-                    if is_pressed and event.time > deadline {
+                on tick(event) {
+                    if is-pressed and event.time > deadline {
                         release "a"
-                        is_pressed = false
+                        is-pressed = false
                         deadline = 0 * ms
                     }
                 }
             }
 
             edges {
-                input >> my_node >> output
+                input >> my-node >> output
             }
         }
     """
@@ -91,6 +104,6 @@ def test_debug_program():
 
     node, edges = graph.body
     assert isinstance(node, parser.Node)
-    assert node.name == 'my_node'
-    assert len(edges) == 1
-    assert edges[0].nodes == ['input', 'my_node', 'output']
+    assert node.name == 'my-node'
+    assert len(edges.body) == 1
+    assert edges.body[0].nodes == ['input', 'my-node', 'output']
