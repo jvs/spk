@@ -198,6 +198,7 @@ ValueExpression = (Name | LiteralExpression) between {
     left: "+", "-"
     infix: wrap("<<"), wrap(">>")
     infix: "<=", ">=", RequiredSpace("<" | ">")
+    infix: "in", NotIn
     infix: "==", "!="
     left: "&"
     left: "^"
@@ -207,6 +208,8 @@ ValueExpression = (Name | LiteralExpression) between {
     left: wrap(kw("or"))
     mixfix: If, Match
 }
+
+NotIn = /not[ \t]+in/ >> `'not in'`
 
 
 ## Literal expressions.

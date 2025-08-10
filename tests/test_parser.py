@@ -40,6 +40,24 @@ def test_nested_tuple_literals():
     assert z == []
 
 
+def test_comparison_operators():
+    program = """
+        x = foo in bar
+        y = fiz not in buz
+        z = zim in zam == flim not in flam
+    """
+    src = parser.parse(program)
+    assert src and isinstance(src, list) and len(src) == 3
+    assert all(isinstance(i, parser.Assign) for i in src)
+
+    Op = parser.Infix
+    x, y, z = [i.value for i in src]
+
+    assert x == Op('foo', 'in', 'bar')
+    assert y == Op('fiz', 'not in', 'buz')
+    assert z == Op(Op('zim', 'in', 'zam'), '==', Op('flim', 'not in', 'flam'))
+
+
 def test_simple_node():
     program = """
         node ComboComposerV1 {
@@ -135,7 +153,7 @@ def test_node_with_generic_types():
             }
 
             on release(event) {
-                if state.is_pressed.contains(event.key) {
+                if event.key in state.is_pressed {
                     state.is_pressed.remove(event.key)
                     release event.key
                 }
