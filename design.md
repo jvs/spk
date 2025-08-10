@@ -695,8 +695,6 @@ node Debouncer {
 
 ### Combo Engine
 
-TODO: Finish this example.
-
 ```
 # Each combo is represented as a set of input keys and a final output key.
 class Combo {
@@ -723,52 +721,132 @@ node ComboEngine {
     }
 
     state {
-        # TODO: Maybe use a doubly-linked list here, so we can drop old events.
+        # Track which keys are currently pressed and when
+        pressed: Map[Key, Time] = {:}
+
+        # Buffer of pending events that might be part of a combo
         buffer = []
+
+        # Time when first key in potential combo was pressed
+        combo_start_time = 0
     }
 
     on press(event) {
-        if is-used(event.key) {
+        if is_combo_key(event.key) {
+            # Start or continue a potential combo
+            if state.pressed.count() == 0 {
+                state.combo_start_time = event.time
+            }
+
+            state.pressed[event.key] = event.time
             state.buffer << event
             return
         }
 
-        if state.buffer.length > 0 {
-            state.buffer = []
-        }
-
-        press event
+        # Non-combo key pressed - flush any pending combo
+        flush_buffer()
+        press event.key
     }
 
     on release(event) {
-        if is-used(event.key) {
+        if is_combo_key(event.key) and state.pressed.contains(event.key) {
             state.buffer << event
-            check-buffer()
+            state.pressed.remove(event.key)
+
+            # Check if all keys released - might be a complete combo
+            if state.pressed.count() == 0 {
+                check_for_combo()
+            }
             return
         }
 
-        release event
+        # Non-combo key or not in pressed set
+        flush_buffer()
+        release event.key
     }
 
     on tick(event) {
-        if state.buffer.length > 0 {
-            check-buffer()
+        if state.pressed.count() > 0 {
+            # Check if combo has timed out
+            if event.time - state.combo_start_time > config.max_hold {
+                flush_buffer()
+            }
         }
     }
 
-    function is-used(key: Key): bool {
+    function is_combo_key(key: Key): bool {
         for combo in config.combos {
-            if key in combo.trigger {
+            if combo.input.contains(key) {
                 return true
             }
         }
-
         return false
     }
 
-    function check-buffer() {
-        # TODO: Check the buffer and emit output events when we see combos.
-        # Use the constants in the config to check the timing of events.
+    function check_for_combo() {
+        # Extract the keys that were pressed
+        pressed_keys = {}
+        first_press_time = 0
+        last_press_time = 0
+        first_release_time = 0
+        last_release_time = 0
+
+        for event in state.buffer {
+            if event.type == "press" {
+                pressed_keys << event.key
+                if first_press_time == 0 {
+                    first_press_time = event.time
+                }
+                last_press_time = event.time
+            } else if event.type == "release" {
+                if first_release_time == 0 {
+                    first_release_time = event.time
+                }
+                last_release_time = event.time
+            }
+        }
+
+        # Check timing windows
+        press_spread = last_press_time - first_press_time
+        release_spread = last_release_time - first_release_time
+        hold_duration = first_release_time - last_press_time
+
+        if press_spread <= config.press_window and
+           release_spread <= config.release_window and
+           hold_duration <= config.max_hold {
+
+            # Check if pressed keys match any combo
+            for combo in config.combos {
+                if pressed_keys == combo.input {
+                    # Combo detected! Emit the output
+                    press combo.output
+                    release combo.output
+                    clear_state()
+                    return
+                }
+            }
+        }
+
+        # Not a valid combo - replay the buffered events
+        flush_buffer()
+    }
+
+    function flush_buffer() {
+        # Replay all buffered events as-is
+        for event in state.buffer {
+            if event.type == "press" {
+                press event.key
+            } else if event.type == "release" {
+                release event.key
+            }
+        }
+        clear_state()
+    }
+
+    function clear_state() {
+        state.buffer = []
+        state.pressed = {:}
+        state.combo_start_time = 0
     }
 }
 ```
@@ -795,52 +873,141 @@ node ChordingEngine {
     }
 
     state {
-        # TODO: Maybe use a doubly-linked list here, so we can drop old events.
-        buffer = []
+        # Track currently pressed keys that might be part of a chord
+        pressed_keys: Set[Key] = {}
 
-        pressed_keys = {}
+        # Buffer to track release events
+        release_buffer = []
+
+        # Time of first release in current sequence
+        first_release_time = 0
+
+        # Keys we've already processed (to avoid double-processing)
+        processed: Set[Key] = {}
     }
 
     on press(event) {
-        state.pressed_keys.add(event.key)
-
-        if is-used(event.key) {
+        if is_chord_key(event.key) {
+            state.pressed_keys << event.key
+            # Don't emit anything yet - wait to see if it's a chord
             return
         }
 
-        if state.buffer.length > 0 {
-            state.buffer.clear()
-        }
-
-        press event
+        # Non-chord key - emit normally
+        press event.key
     }
 
     on release(event) {
-        state.pressed_keys.remove(event.key)
+        if is_chord_key(event.key) and state.pressed_keys.contains(event.key) {
+            # Start or continue tracking releases
+            if state.release_buffer.size() == 0 {
+                state.first_release_time = event.time
+            }
 
-        if is-used(event.key) {
-            state.buffer << event
-            check-buffer()
+            state.release_buffer << event
+            state.pressed_keys.remove(event.key)
+
+            # Check if this could be a chord
+            check_for_chord()
             return
         }
 
-        release event
+        # Non-chord key or not pressed - emit normally
+        release event.key
     }
 
-    function is-used(key: Key): bool {
+    on tick(event) {
+        # Check if we have a partial release that's timed out
+        if state.release_buffer.size() > 0 {
+            if event.time - state.first_release_time > config.release_window {
+                # Timeout - flush any pending releases
+                flush_releases()
+            }
+        }
+    }
+
+    function is_chord_key(key: Key): bool {
         for chord in config.chords {
-            if key in chord.trigger {
+            if chord.input.contains(key) {
                 return true
             }
         }
-
         return false
     }
 
-    function check-buffer() {
-        # TODO: Check the buffer and emit output events when we see chords.
-        # Use the constants in the config to check the timing of events.
-        # All the keys in the combo must be released within the release_window.
+    function check_for_chord() {
+        # Build set of all released keys so far
+        released_keys = {}
+        for event in state.release_buffer {
+            released_keys << event.key
+        }
+
+        # Check if released keys match any chord exactly
+        for chord in config.chords {
+            if released_keys == chord.input {
+                # Perfect match! Check timing
+                last_release_time = state.release_buffer[-1].time
+
+                if last_release_time - state.first_release_time <= config.release_window {
+                    # Valid chord! Emit the output sequence
+                    emit_chord_output(chord)
+                    clear_state()
+                    return
+                }
+            }
+        }
+
+        # Check if we could still be building toward a chord
+        could_be_chord = false
+        for chord in config.chords {
+            # Released keys must be subset of chord input
+            if released_keys.is_subset_of(chord.input) {
+                # And we must still have the remaining keys pressed
+                remaining = chord.input - released_keys
+                if remaining.is_subset_of(state.pressed_keys) {
+                    could_be_chord = true
+                    break
+                }
+            }
+        }
+
+        if not could_be_chord {
+            # No possible chord - flush releases
+            flush_releases()
+        }
+        # Otherwise, keep waiting for more releases
+    }
+
+    function emit_chord_output(chord: Chord) {
+        # Emit the chord's output sequence
+        for key in chord.output {
+            press key
+            release key
+        }
+
+        # Mark all chord keys as processed
+        for key in chord.input {
+            state.processed << key
+        }
+    }
+
+    function flush_releases() {
+        # Emit all buffered releases as individual keys
+        for event in state.release_buffer {
+            # Only emit if not already processed as part of a chord
+            if not state.processed.contains(event.key) {
+                press event.key
+                release event.key
+            }
+        }
+        clear_state()
+    }
+
+    function clear_state() {
+        state.release_buffer = []
+        state.first_release_time = 0
+        state.processed = {}
+        # Note: Don't clear pressed_keys - some might still be held
     }
 }
 ```
@@ -939,6 +1106,15 @@ Support for debugging/tracing could be added via compilation flags
 - Be careful not to have cycles!
 
 ## Questions
+
+- Are there glaring flaws or fundamental problems with this design?
+- Does this DSL solve anything, or does it just push the complexity around?
+- Could this DSL be used to model a very complex keyboard, while still being
+readable and understandable?
+- Does this DSL need additional abstractions to help manage complexity?
+- Does this DSL have too many abstractions?
+
+### Design Questions
 
 - Should the `forward` keyword be required for `event.action(event.key)`?
 - If not, should the `forward` keyword be removed from the grammar?
