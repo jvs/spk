@@ -200,7 +200,7 @@ node Example {
         release "b"
 
         # Emit the event using its action, which is either "press" or "release".
-        forward event.action(event.key)
+        emit event.action(event.key)
     }
 }
 ```
@@ -222,10 +222,10 @@ node Router {
     on key(event) {
         if state.mode == "idle" {
             press "a" to some_port
-            forward event.action(event.key) to other_port
+            emit event.action(event.key) to other_port
         } else {
             release "b" to foo
-            forward event.action(event.key) to bar
+            emit event.action(event.key) to bar
         }
     }
 }
@@ -275,11 +275,11 @@ graph Pipeline {
     node Mapper {
         on key(event) {
             if event.key == "a" {
-                forward event.action("A")
+                emit event.action("A")
             } else if event.key == "b" {
                 shared.is_active = true
             } else {
-                forward event.action(event.key)
+                emit event.action(event.key)
             }
         }
     }
@@ -287,12 +287,12 @@ graph Pipeline {
     node Expander {
         on key(event) {
             if event.key == "tab" and shared.is_active {
-                forward event.action(" ")
-                forward event.action(" ")
-                forward event.action(" ")
-                forward event.action(" ")
+                emit event.action(" ")
+                emit event.action(" ")
+                emit event.action(" ")
+                emit event.action(" ")
             } else {
-                forward event.action(event.key)
+                emit event.action(event.key)
             }
         }
     }
@@ -1116,8 +1116,8 @@ readable and understandable?
 
 ### Design Questions
 
-- Should the `forward` keyword be required for `event.action(event.key)`?
-- If not, should the `forward` keyword be removed from the grammar?
+- Should the `emit` keyword be required for `event.action(event.key)`?
+- If not, should the `emit` keyword be removed from the grammar?
 - Are there too many ways to implement layers?
 - Should support for first-class nodes and graphs be removed?
 

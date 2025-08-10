@@ -26,7 +26,7 @@ kw(word) => Word where `lambda x: x == word`
 keywords = [
     'and',
     'else',
-    'forward',
+    'emit',
     'if',
     'match',
     'not',
@@ -132,7 +132,7 @@ Statement = (
     Assign
     | Emit
     | For
-    | Forward
+    | Operate
     | Return
     | ValueExpression
 )
@@ -156,7 +156,7 @@ class Assign {
 }
 
 class Emit {
-    action: "press" | "release"
+    pass Opt("emit")
     key: ValueExpression
     target: Opt("to" >> ValueExpression)
 }
@@ -170,10 +170,10 @@ class For {
     body: Block(Statement)
 }
 
-class Forward {
-    pass Opt("forward")
+class Operate {
+    action: "press" | "release"
     key: ValueExpression
-    target: "to" >> ValueExpression
+    target: Opt("to" >> ValueExpression)
 }
 
 class Return {
