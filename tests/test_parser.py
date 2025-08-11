@@ -58,6 +58,25 @@ def test_comparison_operators():
     assert z == Op(Op('zim', 'in', 'zam'), '==', Op('flim', 'not in', 'flam'))
 
 
+def test_generic_types():
+    program = """
+        foo: List<List<bool>> = []
+        bar: Map<Symbol, List<Key>> = {:}
+        baz: List<Set<Key>> = {}
+    """
+    src = parser.parse(program)
+    assert src and isinstance(src, list) and len(src) == 3
+    assert all(isinstance(i, parser.Assign) for i in src)
+
+    P = parser.Postfix
+    A = parser.GenericArgumentList
+    foo, bar, baz = [x.type for x in src]
+
+    assert foo == P('List', A([P('List', A(['bool']))]))
+    assert bar == P('Map', A(['Symbol', P('List', A(['Key']))]))
+    assert baz == P('List', A([P('Set', A(['Key']))]))
+
+
 def test_simple_node():
     program = """
         node ComboComposerV1 {

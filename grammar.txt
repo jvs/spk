@@ -139,6 +139,7 @@ Statement = (
 
 class Assign {
     storage: ValueExpression | Names
+    type: Opt(":" >> TypeExpression)
     operator: (
         "="
         | "+="
