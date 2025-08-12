@@ -138,8 +138,7 @@ Statement = (
 )
 
 class Assign {
-    storage: ValueExpression | Names
-    type: Opt(":" >> TypeExpression)
+    storage: OptParenthesesList(Storage)
     operator: (
         "="
         | "+="
@@ -156,6 +155,11 @@ class Assign {
     value: AnonymousDefinition | ValueExpression
 }
 
+class Storage {
+    target: ValueExpression
+    type: Opt(":" >> TypeExpression)
+}
+
 class Emit {
     pass Opt("emit")
     key: ValueExpression
@@ -164,7 +168,7 @@ class Emit {
 
 class For {
     pass kw("for")
-    names: Names
+    storage: OptParenthesesList(Name)
     pass kw("in")
     source: ValueExpression
     guard: Opt(Pad >> kw("if") >> ValueExpression)
@@ -269,25 +273,19 @@ class TupleLiteral {
 ## Postfix operators.
 
 class ArgumentList {
-    arguments: ParenthesesList(ValueExpression | KeywordArgument)
+    arguments: ParenthesesList(KeywordArgument(ValueExpression) | ValueExpression)
 }
 
 class GenericArgumentList {
     arguments: ForbiddenSpace("<") >> (GenericArgument /? Comma) << ForbiddenSpace(">")
 }
 
-GenericArgument = KeywordTypeArgument | TypeExpression
+GenericArgument = KeywordArgument(TypeExpression) | TypeExpression
 
-class KeywordArgument {
+class KeywordArgument(T) {
     name: Word
     pass "="
-    value: ValueExpression
-}
-
-class KeywordTypeArgument {
-    name: Word
-    pass "="
-    value: TypeExpression
+    value: T
 }
 
 class ElementAccess {
@@ -339,7 +337,7 @@ class Parameter {
     default: Opt("=" >> ValueExpression)
 }
 
-Names = (Name /? Comma) | ParenthesesList(Name)
+OptParenthesesList(T) => (T /? Comma) | ParenthesesList(Name)
 
 
 ### List structures.

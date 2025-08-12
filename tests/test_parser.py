@@ -70,7 +70,7 @@ def test_generic_types():
 
     P = parser.Postfix
     A = parser.GenericArgumentList
-    foo, bar, baz = [x.type for x in src]
+    foo, bar, baz = [x.storage[0].type for x in src]
 
     assert foo == P('List', A([P('List', A(['bool']))]))
     assert bar == P('Map', A(['Symbol', P('List', A(['Key']))]))
