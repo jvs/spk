@@ -42,7 +42,7 @@ keywords = [
 
 Name = Word where `lambda x: x not in keywords`
 
-start = wrap(Lines(Assign | Definition | Template)) << ExpectNot(/./)
+start = wrap(Lines(Assign | Definition | Globals | Template)) << ExpectNot(/./)
 
 
 # Top-level definitions.
@@ -73,6 +73,12 @@ class Node {
     pass kw("node")
     name: Opt(Name)
     body: Block(Assign | Config | Function | Handler | State)
+}
+
+class Globals {
+    pass kw("globals")
+    name: Opt(Name)
+    body: Block(Parameter)
 }
 
 class Template {
@@ -337,7 +343,11 @@ class Parameter {
     default: Opt("=" >> ValueExpression)
 }
 
-OptParenthesesList(T) => (T /? Comma) | ParenthesesList(Name)
+OptParenthesesList(T) =>
+    "(" >> T << ")"
+    | ParenthesesList(T)
+    | Sep(T, Comma, allow_empty=false, allow_trailer=true, require_separator=true)
+    | T
 
 
 ### List structures.

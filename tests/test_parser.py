@@ -40,6 +40,36 @@ def test_nested_tuple_literals():
     assert z == []
 
 
+def test_tuple_assignment():
+    program = """
+        (a) = foo
+        (b,) = (bar,)
+        (c, d) = (fiz, buz)
+        e, f = (zim, zam)
+    """
+    P = parser
+    src = P.parse(program)
+
+    assert src == [
+        P.Assign(storage=P.Storage(target='a', type=None), operator='=', value='foo'),
+        P.Assign(
+            storage=[P.Storage(target='b', type=None)],
+            operator='=',
+            value=P.TupleLiteral(elements=['bar']),
+        ),
+        P.Assign(
+            storage=[P.Storage(target='c', type=None), P.Storage(target='d', type=None)],
+            operator='=',
+            value=P.TupleLiteral(elements=['fiz', 'buz']),
+        ),
+        P.Assign(
+            storage=[P.Storage(target='e', type=None), P.Storage(target='f', type=None)],
+            operator='=',
+            value=P.TupleLiteral(elements=['zim', 'zam']),
+        ),
+    ]
+
+
 def test_comparison_operators():
     program = """
         x = foo in bar
@@ -70,7 +100,7 @@ def test_generic_types():
 
     P = parser.Postfix
     A = parser.GenericArgumentList
-    foo, bar, baz = [x.storage[0].type for x in src]
+    foo, bar, baz = [x.storage.type for x in src]
 
     assert foo == P('List', A([P('List', A(['bool']))]))
     assert bar == P('Map', A(['Symbol', P('List', A(['Key']))]))
