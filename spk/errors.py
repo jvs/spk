@@ -13,7 +13,7 @@ class DuplicateDefinitions:
 
 @dataclass
 class OnlySimpleAssignments:
-    assign: parser.Assign
+    assign: parser.Assign | parser.Variable
 
 
 @dataclass

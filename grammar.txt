@@ -42,7 +42,7 @@ keywords = [
 
 Name = Word where `lambda x: x not in keywords`
 
-start = wrap(Lines(Assign | Definition | Globals | Template)) << ExpectNot(/./)
+start = wrap(Lines(Definition | Globals | Template | Variable)) << ExpectNot(/./)
 
 
 # Top-level definitions.
@@ -66,13 +66,13 @@ class Function {
 class Graph {
     pass kw("graph")
     name: Opt(Name)
-    body: Block(Assign | Config | Edges | Function | Node | State)
+    body: Block(Config | Edges | Function | Node | State | Variable)
 }
 
 class Node {
     pass kw("node")
     name: Opt(Name)
-    body: Block(Assign | Config | Function | Handler | State)
+    body: Block(Config | Function | Handler | State | Variable)
 }
 
 class Globals {
@@ -87,6 +87,16 @@ class Template {
     parameters: ParenthesesList(Parameter)
     returns: Opt(":" >> TypeExpression)
     body: Block(Statement)
+}
+
+class Variable {
+    names: OptParenthesesList(AnnotatedName)
+    value: "=" >> ValueExpression
+}
+
+class AnnotatedName {
+    name: Name
+    type: Opt(":" >> TypeExpression)
 }
 
 AnonymousDefinition = Definition where `lambda x: x.name is None`
@@ -135,7 +145,8 @@ class State {
 ## Statements.
 
 Statement = (
-    Assign
+    Variable
+    | Assign
     | Emit
     | For
     | Operate
@@ -158,7 +169,7 @@ class Assign {
         | "^="
         | "|="
     )
-    value: AnonymousDefinition | ValueExpression
+    value: ValueExpression
 }
 
 class Storage {
@@ -201,7 +212,7 @@ TypeExpression = ValueExpression
 
 ## Value-level expressions.
 
-ValueExpression = (Reference | LiteralExpression) between {
+ValueExpression = (Reference | LiteralExpression | AnonymousDefinition) between {
     mixfix: "(" >> wrap(ValueExpression) << ")"
     postfix: ArgumentList, ElementAccess, FieldAccess, GenericArgumentList
     prefix: "-"

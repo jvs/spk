@@ -24,7 +24,7 @@ def test_tuple_literals():
     """
     src = parse(program)
     assert src and isinstance(src, list) and len(src) == 4
-    assert all(isinstance(i, parser.Assign) for i in src)
+    assert all(isinstance(i, parser.Variable) for i in src)
     assert all(isinstance(i.value, parser.TupleLiteral) for i in src)
 
     w, x, y, z = [i.value.elements for i in src]
@@ -42,7 +42,7 @@ def test_nested_tuple_literals():
     """
     src = parse(program)
     assert src and isinstance(src, list) and len(src) == 3
-    assert all(isinstance(i, parser.Assign) for i in src)
+    assert all(isinstance(i, parser.Variable) for i in src)
     assert all(isinstance(i.value, parser.TupleLiteral) for i in src)
 
     Tuple = parser.TupleLiteral
@@ -54,7 +54,7 @@ def test_nested_tuple_literals():
     assert z == []
 
 
-def test_tuple_assignment():
+def test_multipart_variable_definitions():
     program = """
         (a) = foo
         (b,) = (bar,)
@@ -65,20 +65,23 @@ def test_tuple_assignment():
     src = parse(program)
 
     assert src == [
-        P.Assign(storage=P.Storage(target='a', type=None), operator='=', value='foo'),
-        P.Assign(
-            storage=[P.Storage(target='b', type=None)],
-            operator='=',
+        P.Variable(names=P.AnnotatedName(name='a', type=None), value='foo'),
+        P.Variable(
+            names=[P.AnnotatedName(name='b', type=None)],
             value=P.TupleLiteral(elements=['bar']),
         ),
-        P.Assign(
-            storage=[P.Storage(target='c', type=None), P.Storage(target='d', type=None)],
-            operator='=',
+        P.Variable(
+            names=[
+                P.AnnotatedName(name='c', type=None),
+                P.AnnotatedName(name='d', type=None),
+            ],
             value=P.TupleLiteral(elements=['fiz', 'buz']),
         ),
-        P.Assign(
-            storage=[P.Storage(target='e', type=None), P.Storage(target='f', type=None)],
-            operator='=',
+        P.Variable(
+            names=[
+                P.AnnotatedName(name='e', type=None),
+                P.AnnotatedName(name='f', type=None),
+            ],
             value=P.TupleLiteral(elements=['zim', 'zam']),
         ),
     ]
@@ -92,10 +95,10 @@ def test_comparison_operators():
     """
     src = parse(program)
     assert src and isinstance(src, list) and len(src) == 3
-    assert all(isinstance(i, parser.Assign) for i in src)
+    assert all(isinstance(i, parser.Variable) for i in src)
 
     Op = parser.Infix
-    x, y, z = [i.value for i in src]
+    x, y, z = [i.value for i in src if isinstance(i, parser.Variable)]
 
     assert x == Op('foo', 'in', 'bar')
     assert y == Op('fiz', 'not in', 'buz')
@@ -110,11 +113,11 @@ def test_generic_types():
     """
     src = parse(program)
     assert src and isinstance(src, list) and len(src) == 3
-    assert all(isinstance(i, parser.Assign) for i in src)
+    assert all(isinstance(i, parser.Variable) for i in src)
 
     P = parser.Postfix
     A = parser.GenericArgumentList
-    foo, bar, baz = [x.storage.type for x in src]
+    foo, bar, baz = [x.names.type for x in src]
 
     assert foo == P('List', A([P('List', A(['bool']))]))
     assert bar == P('Map', A(['Symbol', P('List', A(['Key']))]))

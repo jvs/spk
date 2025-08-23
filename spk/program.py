@@ -16,6 +16,14 @@ class Environment:
 
         self.definitions[name] = value
 
+    def lookup(self, name):
+        if name in self.definitions:
+            return self.definitions[name]
+        elif self.parent is not None:
+            return self.parent.lookup(name)
+        else:
+            return None
+
 
 class Program:
     def __init__(self, environment: Environment):
@@ -51,11 +59,11 @@ def create_program(parsed_objects: list[parser.ParsedObject]) -> Program:
         parent, child = info.parent, info.child
 
         if not info.is_finished:
-            if isinstance(child, parser.Assign):
-                if isinstance(child.storage, list):
+            if isinstance(child, parser.Variable):
+                if isinstance(child.names, list):
                     environment.reporter.error(errors.OnlySimpleAssignments(child))
                 else:
-                    environment.define(child.storage.name, child)
+                    environment.define(child.names.name, child)
 
             elif isinstance(child, Def) or isinstance(child, parser.Template):
                 environment.define(child.name, child)
@@ -72,6 +80,12 @@ def create_program(parsed_objects: list[parser.ParsedObject]) -> Program:
             environment = environment_stack[-1]
 
     assert environment is root_environment
+
+    for obj in parser.visit(parsed_objects):
+        if isinstance(obj, parser.Reference):
+            environment = obj._metadata.environment
+            obj._metadata.references = environment.lookup(obj.name)
+
     return Program(environment=root_environment)
 
 
@@ -109,46 +123,3 @@ def _creates_new_environment(info):
             and info.field in ['then_branch', 'else_branch']
         )
     )
-
-
-def _register(
-    parsed_objects: list[parser.ParsedObject],
-    environment: Environment,
-):
-    for item in parsed_objects:
-        item._metadata.object_id = environment.reporter.reserve_id()
-        item._metadata.environment = environment
-
-        if isinstance(item, parser.Assign):
-            if isinstance(item.storage, list):
-                environment.reporter.error(errors.OnlySimpleAssignments(item))
-            else:
-                environment.bind(item.storage, item)
-
-        elif isinstance(item, Def):
-            if item.name is None:
-                environment.reporter.error(errors.UnboundAnonymousItem(item))
-            else:
-                environment.bind(item.name, item)
-
-            body = getattr(item, 'body', None)
-
-            if body is not None:
-                assert isinstance(body, list)
-
-                _register(
-                    parsed_objects=body,
-                    environment=Environment(parent=environment),
-                )
-
-        elif isinstance(item, parser.Globals):
-            _register(
-                parsed_objects=item.body,
-                environment=Environment(parent=environment),
-            )
-
-        elif isinstance(item, parser.Template):
-            if item.name is None:
-                environment.reporter.error(errors.UnboundAnonymousItem(item))
-            else:
-                environment.bind(item.name, item)
