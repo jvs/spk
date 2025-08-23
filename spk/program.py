@@ -1,25 +1,25 @@
+from __future__ import annotations
 from . import errors, parser
 
 Def = (parser.Class, parser.Function, parser.Graph, parser.Node)
 
 
 class Environment:
-    def __init__(self, parent, reporter):
+    def __init__(self, parent: Environment | None):
         self.parent = parent
-        self.reporter = reporter
-        self.bindings = {}
+        self.reporter = parent.reporter if parent else Reporter()
+        self.definitions = {}
 
-    def bind(self, name, value) -> None:
-        if name in self.bindings:
-            self.reporter.error(errors.DuplicateDefinitions(name, self.bindings[name], value))
+    def define(self, name: str, value: parser.ParsedObject) -> None:
+        if name in self.definitions:
+            self.reporter.error(errors.DuplicateDefinitions(name, self.definitions[name], value))
 
-        self.bindings[name] = value
+        self.definitions[name] = value
 
 
 class Program:
-    def __init__(self, environment, reporter):
+    def __init__(self, environment: Environment):
         self.environment = environment
-        self.reporter = reporter
 
 
 class Reporter:
@@ -30,42 +30,104 @@ class Reporter:
     def error(self, obj):
         self.errors.append(obj)
 
-    def reserve_id(self):
+    def reserve_id(self) -> int:
         result = self._next_id
         self._next_id += 1
         return result
 
 
 def create_program(parsed_objects: list[parser.ParsedObject]) -> Program:
-    reporter = Reporter()
-    environment = Environment(parent=None, reporter=reporter)
+    root_environment = Environment(parent=None)
+    reporter = root_environment.reporter
 
-    _visit(
-        parsed_objects=parsed_objects,
-        environment=environment,
-        reporter=reporter,
+    # Assign each parsed object a unique ID.
+    for obj in parser.visit(parsed_objects):
+        obj._metadata.object_id = reporter.reserve_id()
+
+    # Create a tree of environments.
+    environment_stack = [root_environment]
+    environment = environment_stack[-1]
+    for info in parser.traverse(parsed_objects):
+        parent, child = info.parent, info.child
+
+        if not info.is_finished:
+            if isinstance(child, parser.Assign):
+                if isinstance(child.storage, list):
+                    environment.reporter.error(errors.OnlySimpleAssignments(child))
+                else:
+                    environment.define(child.storage.name, child)
+
+            elif isinstance(child, Def) or isinstance(child, parser.Template):
+                environment.define(child.name, child)
+
+            elif isinstance(child, parser.Reference):
+                child._metadata.environment = environment
+
+        if _creates_new_environment(info):
+            if info.is_finished:
+                environment_stack.pop()
+            else:
+                environment_stack.append(Environment(parent=environment))
+
+            environment = environment_stack[-1]
+
+    assert environment is root_environment
+    return Program(environment=root_environment)
+
+
+def _creates_new_environment(info):
+    return (
+        isinstance(
+            info.child,
+            (
+                parser.Class,
+                parser.Config,
+                parser.Function,
+                parser.Graph,
+                parser.Handler,
+                parser.Node,
+                parser.Globals,
+                parser.State,
+                parser.Template,
+            ),
+        )
+        or (
+            isinstance(
+                info.parent,
+                (
+                    parser.Function,
+                    parser.Handler,
+                    parser.Template,
+                    parser.For,
+                ),
+            )
+            and info.field == 'body'
+        )
+        or (
+            isinstance(info.parent, parser.If)
+            and isinstance(info.child, list)
+            and info.field in ['then_branch', 'else_branch']
+        )
     )
 
-    return Program(environment=environment, reporter=reporter)
 
-
-def _visit(
+def _register(
     parsed_objects: list[parser.ParsedObject],
     environment: Environment,
-    reporter: Reporter,
 ):
     for item in parsed_objects:
-        item._metadata.object_id = reporter.reserve_id()
+        item._metadata.object_id = environment.reporter.reserve_id()
+        item._metadata.environment = environment
 
         if isinstance(item, parser.Assign):
-            if isinstance(item.location, str) and item.operator == '=':
-                environment.bind(item.location, item)
+            if isinstance(item.storage, list):
+                environment.reporter.error(errors.OnlySimpleAssignments(item))
             else:
-                reporter.error(errors.OnlySimpleAssignments(item))
+                environment.bind(item.storage, item)
 
         elif isinstance(item, Def):
             if item.name is None:
-                reporter.error(errors.UnboundAnonymousItem(item))
+                environment.reporter.error(errors.UnboundAnonymousItem(item))
             else:
                 environment.bind(item.name, item)
 
@@ -74,13 +136,19 @@ def _visit(
             if body is not None:
                 assert isinstance(body, list)
 
-                item._metadata.environment = Environment(
-                    parent=environment,
-                    reporter=reporter,
+                _register(
+                    parsed_objects=body,
+                    environment=Environment(parent=environment),
                 )
 
-                _visit(
-                    parsed_objects=body,
-                    environment=item._metadata.environment,
-                    reporter=reporter,
-                )
+        elif isinstance(item, parser.Globals):
+            _register(
+                parsed_objects=item.body,
+                environment=Environment(parent=environment),
+            )
+
+        elif isinstance(item, parser.Template):
+            if item.name is None:
+                environment.reporter.error(errors.UnboundAnonymousItem(item))
+            else:
+                environment.bind(item.name, item)

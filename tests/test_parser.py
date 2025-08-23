@@ -1,6 +1,20 @@
 from spk import parser
 
 
+def strip_references(parsed_objects):
+    def strip(parsed_object):
+        if isinstance(parsed_object, parser.Reference):
+            return parsed_object.name
+        else:
+            return parsed_object
+
+    return parser.transform(parsed_objects, strip)
+
+
+def parse(text):
+    return strip_references(parser.parse(text))
+
+
 def test_tuple_literals():
     program = """
         w = (foo, bar, baz)
@@ -8,7 +22,7 @@ def test_tuple_literals():
         y = (zim,)
         z = ()
     """
-    src = parser.parse(program)
+    src = parse(program)
     assert src and isinstance(src, list) and len(src) == 4
     assert all(isinstance(i, parser.Assign) for i in src)
     assert all(isinstance(i.value, parser.TupleLiteral) for i in src)
@@ -26,7 +40,7 @@ def test_nested_tuple_literals():
         y = (((),),)
         z = (())
     """
-    src = parser.parse(program)
+    src = parse(program)
     assert src and isinstance(src, list) and len(src) == 3
     assert all(isinstance(i, parser.Assign) for i in src)
     assert all(isinstance(i.value, parser.TupleLiteral) for i in src)
@@ -48,7 +62,7 @@ def test_tuple_assignment():
         e, f = (zim, zam)
     """
     P = parser
-    src = P.parse(program)
+    src = parse(program)
 
     assert src == [
         P.Assign(storage=P.Storage(target='a', type=None), operator='=', value='foo'),
@@ -76,7 +90,7 @@ def test_comparison_operators():
         y = fiz not in buz
         z = zim in zam == flim not in flam
     """
-    src = parser.parse(program)
+    src = parse(program)
     assert src and isinstance(src, list) and len(src) == 3
     assert all(isinstance(i, parser.Assign) for i in src)
 
@@ -94,7 +108,7 @@ def test_generic_types():
         bar: Map<Symbol, List<Key>> = {:}
         baz: List<Set<Key>> = {}
     """
-    src = parser.parse(program)
+    src = parse(program)
     assert src and isinstance(src, list) and len(src) == 3
     assert all(isinstance(i, parser.Assign) for i in src)
 
@@ -116,7 +130,7 @@ def test_simple_node():
             }
         }
     """
-    src = parser.parse(program)
+    src = parse(program)
     assert src
 
 
@@ -160,7 +174,7 @@ def test_program_with_many_literals():
             }
         }
     """
-    src = parser.parse(program)
+    src = parse(program)
     assert src
 
     assert len(src) == 1
@@ -209,7 +223,7 @@ def test_node_with_generic_types():
             }
         }
     """
-    src = parser.parse(program)
+    src = parse(program)
     assert src and isinstance(src, list) and len(src) == 1
     debouncer = src[0]
     assert debouncer.name == 'Debouncer'

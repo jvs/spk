@@ -201,7 +201,7 @@ TypeExpression = ValueExpression
 
 ## Value-level expressions.
 
-ValueExpression = (Name | LiteralExpression) between {
+ValueExpression = (Reference | LiteralExpression) between {
     mixfix: "(" >> wrap(ValueExpression) << ")"
     postfix: ArgumentList, ElementAccess, FieldAccess, GenericArgumentList
     prefix: "-"
@@ -222,6 +222,9 @@ ValueExpression = (Name | LiteralExpression) between {
 
 NotIn = /not[ \t]+in/ >> `'not in'`
 
+class Reference {
+    name: Name
+}
 
 ## Literal expressions.
 
