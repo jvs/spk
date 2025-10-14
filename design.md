@@ -9,9 +9,10 @@ integration with QMK, ZMK, or hid-remapper.
 
 ## Type System
 
-- **bool**: `true` and `false` values.
-- **int8**, **int16**, **int32**, **int64**: signed integers.
-- **uint8**, **uint16**, **uint32**, **uint64**: unsigned integers.
+
+- **Bit**: `1` or `0`, equivalent to `true` and `false`. (**Bool** is an alias for **Bit**.)
+- **I8**, **I16**, **I32**, **I64**: signed integers.
+- **U8**, **U16**, **U32**, **U64**: unsigned integers.
 - **Time**: a number representing a time value.
 - **Duration**: a number representing a duration value.
 - **Symbol**: an opaque type, compiled to some integer value. Represented in
@@ -36,8 +37,8 @@ A, B, and C and returns a value of type R.
 - Statements are separated by newlines.
 - Comments begin with `#` and end with a newline.
 - Symbols look like string literals, but each symbol is compiled to number. A
-Symbol value does not have length, for example, or any other traditional string
-functions.
+Symbol value does not have length property, for example, or any other traditional
+string functions.
 
 
 ## Event Model
@@ -50,7 +51,7 @@ Key press events:
         type: "press",
         key: Symbol,
         time: Time,
-        counter: uint32,
+        counter: U32,
     }
 ```
 
@@ -60,7 +61,7 @@ Key release events:
         type: "release",
         key: Symbol,
         time: Time,
-        counter: uint32,
+        counter: U32,
     }
 ```
 
@@ -69,7 +70,7 @@ Clock tick events:
     {
         type: "tick",
         time: Time,
-        counter: uint32,
+        counter: U32,
     }
 ```
 
@@ -1026,8 +1027,9 @@ class LeaderKey {
 
         sequences = [
             Chord(input = ["a", "m"], output = ["&"]),
-            Chord(input = {"e", "q"}, output = ["="]),
-            Chord(input = {"e", "e"}, output = ["=", "="]),
+            Chord(input = ["e", "q"], output = ["="]),
+            Chord(input = ["e", "e"], output = ["=", "="]),
+            Chord(input = ["n", "e"], output = ["!", "="]),
         ]
 
         # Initial grace period.
@@ -1116,6 +1118,7 @@ readable and understandable?
 
 ### Design Questions
 
+- Why does it need to be `event.action(...)` instead of just `event(...)`?
 - Should the `emit` keyword be required for `event.action(event.key)`?
 - If not, should the `emit` keyword be removed from the grammar?
 - Are there too many ways to implement layers?
