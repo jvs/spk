@@ -329,12 +329,18 @@ class If {
 class Match {
     pass kw("match")
     value: ValueExpression
-    cases: Block(MatchCase)
+    cases: Block(MatchCase | FallbackCase)
 }
 
 class MatchCase {
     pass kw("case")
-    pattern: Opt(ValueExpression | "*")
+    pattern: Opt(ValueExpression)
+    guard: Opt(kw("if") >> ValueExpression)
+    body: Block(Statement)
+}
+
+clase FallbackCase {
+    pass kw("else")
     guard: Opt(kw("if") >> ValueExpression)
     body: Block(Statement)
 }

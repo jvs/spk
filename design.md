@@ -5,12 +5,12 @@
 This document describes a domain-specific language (DSL) for composing stream
 processors that handle keyboard events. The DSL aims to provide a nice
 abstraction for keyboard firmware logic that can compile to C code for
-integration with QMK, ZMK, or hid-remapper.
+integration with QMK, ZMK, or a USB bridge device.
 
 ## Type System
 
 
-- **Bit**: `1` or `0`, equivalent to `true` and `false`. (**Bool** is an alias for **Bit**.)
+- **Bit**: `1` or `0`, equivalent to `true` and `false`.
 - **I8**, **I16**, **I32**, **I64**: signed integers.
 - **U8**, **U16**, **U32**, **U64**: unsigned integers.
 - **Time**: a number representing a time value.
@@ -37,44 +37,35 @@ A, B, and C and returns a value of type R.
 - Statements are separated by newlines.
 - Comments begin with `#` and end with a newline.
 - Symbols look like string literals, but each symbol is compiled to number. A
-Symbol value does not have length property, for example, or any other traditional
+Symbol value does not have length property for example, or any other traditional
 string functions.
+- Symbol literals are case-insensitive. `"LEFT ALT"` and "left alt" represent the same symbol.
 
 
 ## Event Model
 
-### Event Types
+### Event Type
 
-Key press events:
-```
-    {
-        type: "press",
-        key: Symbol,
-        time: Time,
-        counter: U32,
-    }
-```
+There's just one **Event** type.
 
-Key release events:
 ```
-    {
-        type: "release",
-        key: Symbol,
-        time: Time,
-        counter: U32,
-    }
+class Event {
+    type: Symbol
+    key: Symbol
+    time: Time
+    counter: U32
+}
 ```
 
-Clock tick events:
-```
-    {
-        type: "tick",
-        time: Time,
-        counter: U32,
-    }
-```
+Types of events:
+
+- Key press: `type = "press"`
+- Key release: `type = "release"`
+- Clock tick: `type = "tick", key = "tick"`
 
 A new clock tick events fires once every 1ms.
+
+Event records are immutable.
 
 
 ### Timing Semantics
@@ -249,15 +240,16 @@ In this example, the Router node has four ports: `some_port`, `other_port`,
 node may have more than one `on press(event)` handlers. They are all called for
 any applicable event. They are called in the order in which they are defined.
 - A node may have a handler for all key events: `on key(event)`. This handler
-is called for each "press" event and each "release" event. The `event.action`
+is called for each `"press"` event and each `"release"` event. The `event.type`
 property can be used to test which kind of event it is.
-- Each node is a singleton object of type `Node`.
-- A node is a first class value. It may be assigned to a variable.
 - A node can have multiple `state` sections, for organization. Each state section
 can optionally have a name, for disambiguation.
 - A node can have one or more `config` sections, which may also optionally be
 named. A config section is similar to a `state` section, only the compiler
 verifies that no data in any config section is mutated or deleted.
+- A node is a first-class value at compile-time, but not at runtime. A `template`
+function can return a Node (or a Graph), which can be assigned to a compile-time
+variable.
 
 ### Graphs
 
@@ -308,10 +300,12 @@ graph Pipeline {
 other graphs and nodes.
 - The special graph called `main` runs as the main program. In this case, the
 `input` and `output` elements connect the graph to the host system, like QMK,
-ZMK, or hid-remapper.
+ZMK, or a USB bridge device.
 - The `edges` section may have multiple lines, each line connecting a sequence
 of nodes or subgraphs.
-- Like nodes, graphs are first class values and may be assigned to variables.
+- Like nodes, graphs are only first class values at compile-time. A `template`
+function can return a Graph value which may be assigned to a compile-time
+variable.
 - Also like nodes, each graph defines a singleton `Graph` object.
 
 ### Edges
@@ -402,7 +396,7 @@ graph main {
         sym_key = "right alt"
     }
 
-    global {
+    state global {
         layer = "normal"
     }
 
@@ -416,7 +410,7 @@ graph main {
             match event.key {
                 case config.nav_key { global.layer = "nav" }
                 case config.sym_key { global.layer = "sym" }
-                case * { press event.key }
+                else { press event.key }
             }
         }
 
@@ -448,15 +442,15 @@ graph main {
         # Always connect the input to the router node.
         input >> router
 
-        if shared.layer == "normal" {
+        if global.layer == "normal" {
             router >> normal >> output
         }
 
-        if shared.layer == "nav" {
+        if global.layer == "nav" {
             router >> nav >> output
         }
 
-        if shared.layer == "sym" {
+        if global.layer == "sym" {
             router >> sym >> output
         }
     }
@@ -489,7 +483,7 @@ graph main {
             match event.key {
                 case config.nav_key { global.layer = nav }
                 case config.sym_key { global.layer = sym }
-                case * { press event.key to global.layer }
+                else { press event.key to global.layer }
             }
         }
 
@@ -550,7 +544,7 @@ graph main {
                 match event.key {
                     case config.nav_key { global.layer = "nav" }
                     case config.sym_key { global.layer = "sym" }
-                    case * { press event.key to normal }
+                    else { press event.key to normal }
                 }
             } else if global.layer == "nav" {
                 press event.key to nav
@@ -1079,7 +1073,7 @@ class LeaderKey {
 The DSL compiles to C code that integrates with QMK/ZMK:
 
 - **Input integration**: Hooks into QMK's `process_record_user()`, or ZMK's
-behavior system, or hid-remapper's `set_input_state/process_mapping` functions.
+behavior system.
 - **Output integration**: Calls QMK's `register_code()/unregister_code()` or
 ZMK's HID functions.
 - **State management**: Generates C structs and functions for each node.
@@ -1118,11 +1112,15 @@ readable and understandable?
 
 ### Design Questions
 
+- What values are made available by the `system` namespace?
 - Why does it need to be `event.action(...)` instead of just `event(...)`?
 - Should the `emit` keyword be required for `event.action(event.key)`?
 - If not, should the `emit` keyword be removed from the grammar?
 - Are there too many ways to implement layers?
 - Should support for first-class nodes and graphs be removed?
+- Should the system allow sibling state sections to have the same name, where
+the system would merge them?
+- Should support for user-defined classes be removed?
 
 ## Todo
 
