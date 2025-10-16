@@ -28,6 +28,8 @@ other programming languages).
 - **Graph**: a graph of stream processing nodes.
 - **Function<Tuple<A, B, C>, R>**: a function that takes arugments of types
 A, B, and C and returns a value of type R.
+- **Nothing**: the type with only one value, called `nothing`.
+- **Never**: the type with no values.
 
 
 ## Syntax
@@ -39,7 +41,8 @@ A, B, and C and returns a value of type R.
 - Symbols look like string literals, but each symbol is compiled to number. A
 Symbol value does not have length property for example, or any other traditional
 string functions.
-- Symbol literals are case-insensitive. `"LEFT ALT"` and "left alt" represent the same symbol.
+- Symbol literals are case-insensitive. `"LEFT ALT"` and `"left alt"` represent
+the same symbol.
 
 
 ## Event Model
@@ -70,8 +73,10 @@ Event records are immutable.
 
 ### Timing Semantics
 
-All emitted events use current system time (not original event time).
-This ensures temporal consistency and prevents timing bugs.
+All emitted events use current system time (not original event time). For example,
+if a node is processing an event, and emits an event of its own, this new event
+gets the current system time, not the time of the original event that the node
+was handling.
 
 ## Core Language Constructs
 
@@ -95,7 +100,7 @@ node Shout {
 
     on press(event) {
         # Toggle the state each time CapsLock is pressed.
-        if event.key == "CapsLock" {
+        if event.key == "Caps Lock" {
             state.is_active = not state.is_active
         }
 
@@ -191,8 +196,8 @@ node Example {
         # Emit a "release" event using the "b" key.
         release "b"
 
-        # Emit the event using its action, which is either "press" or "release".
-        emit event.action(event.key)
+        # Emit the event using the same type, which is either "press" or "release".
+        emit event.type(event.key)
     }
 }
 ```
@@ -214,10 +219,10 @@ node Router {
     on key(event) {
         if state.mode == "idle" {
             press "a" to some_port
-            emit event.action(event.key) to other_port
+            emit event.type(event.key) to other_port
         } else {
             release "b" to foo
-            emit event.action(event.key) to bar
+            emit event.type(event.key) to bar
         }
     }
 }
@@ -268,11 +273,11 @@ graph Pipeline {
     node Mapper {
         on key(event) {
             if event.key == "a" {
-                emit event.action("A")
+                emit event.type("A")
             } else if event.key == "b" {
                 shared.is_active = true
             } else {
-                emit event.action(event.key)
+                emit event.type(event.key)
             }
         }
     }
@@ -280,12 +285,12 @@ graph Pipeline {
     node Expander {
         on key(event) {
             if event.key == "tab" and shared.is_active {
-                emit event.action(" ")
-                emit event.action(" ")
-                emit event.action(" ")
-                emit event.action(" ")
+                emit event.type(" ")
+                emit event.type(" ")
+                emit event.type(" ")
+                emit event.type(" ")
             } else {
-                emit event.action(event.key)
+                emit event.type(event.key)
             }
         }
     }
@@ -377,6 +382,48 @@ Classes are instantiated by calling the class name like a function:
 ```
 escape_combo = Combo({"j", "k"}, "escape")
 ```
+
+## System Values
+
+spk tracks a bunch of state automatically and makes it available through the
+global `system` object.
+
+```
+class Delivery {
+    event: Event
+    receive: Function<Tuple<Event>, Nothing>
+}
+
+class ScheduledDelivery {
+    event: Event
+    receive: Function<Tuple<Event>, Nothing>
+    time: Time
+}
+
+node system {
+    state input {
+        recent_events: List<Event>
+        currently_pressed: Map<Key, Event>
+        last_pressed: Map<Key, Event>
+        last_released: Map<Key, Event>
+    }
+
+    state processing {
+        active_deliveries: List<Delivery>
+        scheduled_deliveries: List<ScheduledDelivery>
+    }
+
+    state output {
+        recent_events: List<Event>
+        currently_pressed: Map<Key, Event>
+        last_pressed: Map<Key, Event>
+        last_released: Map<Key, Event>
+    }
+}
+```
+
+All values in the `system` object are maintained by the runtime and may not be
+changed by the rest of the program.
 
 
 ## Examples
@@ -1112,9 +1159,13 @@ readable and understandable?
 
 ### Design Questions
 
+- Should the language have a type alias statement?
+- Should the Key datatype be dropped in favor of just using Symbol for everything?
+- (Right now, it basically just distinguishes between event type and keycode, which
+doesn't really seem worth the complexity.)
 - What values are made available by the `system` namespace?
-- Why does it need to be `event.action(...)` instead of just `event(...)`?
-- Should the `emit` keyword be required for `event.action(event.key)`?
+- Why does it need to be `event.type(...)` instead of just `event(...)`?
+- Should the `emit` keyword be required for `event.type(event.key)`?
 - If not, should the `emit` keyword be removed from the grammar?
 - Are there too many ways to implement layers?
 - Should support for first-class nodes and graphs be removed?
