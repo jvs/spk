@@ -15,11 +15,11 @@ integration with QMK, ZMK, or a USB bridge device.
 - **U8**, **U16**, **U32**, **U64**: unsigned integers.
 - **Time**: a number representing a time value.
 - **Duration**: a number representing a duration value.
-- **Symbol**: an opaque type, compiled to some integer value. Represented in
+- **Key**: an opaque type, compiled to some integer value. Represented in
 source code as character sequences surrounded by double-quotes (like strings in
 other programming languages).
-- **Key**: a `Symbol` for a key on a keyboard.
-- **Event**: a key press, key release, or clock tick event.
+- **EventType**: One of five values: `press`, `release`, `tick`, `click`, `move`.
+- **Event**: A record with an `EventType`, a `Key`, and a `Time` value.
 - **Set<T>**: a generic set of elements of the same type.
 - **List<T>**: a generic list of elements of the same type.
 - **Map<K, V>**: a generic map of key-value pairs.
@@ -38,11 +38,9 @@ A, B, and C and returns a value of type R.
 - Curly braces surround code blocks.
 - Statements are separated by newlines.
 - Comments begin with `#` and end with a newline.
-- Symbols look like string literals, but each symbol is compiled to number. A
-Symbol value does not have length property for example, or any other traditional
+- Key values look like string literals, but each one is compiled to number. A
+Key value does not have length property for example, or any other traditional
 string functions.
-- Symbol literals are case-insensitive. `"LEFT ALT"` and `"left alt"` represent
-the same symbol.
 
 
 ## Event Model
@@ -53,30 +51,30 @@ There's just one **Event** type.
 
 ```
 class Event {
-    type: Symbol
-    key: Symbol
+    type: EventType
+    key: Key
     time: Time
-    counter: U32
 }
 ```
+
+Event records are immutable.
 
 Types of events:
 
 - Key press: `type = "press"`
 - Key release: `type = "release"`
-- Clock tick: `type = "tick", key = "tick"`
+- Clock tick: `type = "tick"
 
 A new clock tick events fires once every 1ms.
-
-Event records are immutable.
 
 
 ### Timing Semantics
 
-All emitted events use current system time (not original event time). For example,
-if a node is processing an event, and emits an event of its own, this new event
-gets the current system time, not the time of the original event that the node
-was handling.
+Each event uses current system time when it is emitted. For example, if a node
+is processing an event, and emits an event of its own, this new event gets the
+current system time, not the time of the original event that the node was
+handling.
+
 
 ## Core Language Constructs
 
