@@ -179,7 +179,7 @@ class Storage {
 
 class Emit {
     pass Opt("emit")
-    key: ValueExpression
+    event: ValueExpression
     target: Opt("to" >> ValueExpression)
 }
 
@@ -193,7 +193,7 @@ class For {
 }
 
 class Operate {
-    action: "press" | "release"
+    action: "press" | "release" | "click" | "move"
     key: ValueExpression
     target: Opt("to" >> ValueExpression)
 }
