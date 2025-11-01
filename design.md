@@ -63,7 +63,7 @@ Types of events:
 
 - Key press: `type = "press"`
 - Key release: `type = "release"`
-- Clock tick: `type = "tick"
+- Clock tick: `type = "tick"`
 
 A new clock tick events fires once every 1ms.
 
