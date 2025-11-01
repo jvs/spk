@@ -20,8 +20,8 @@ source code as character sequences surrounded by double-quotes (like strings in
 other programming languages).
 - **EventType**: One of five values: `press`, `release`, `tick`, `click`, `move`.
 - **Event**: A record with an `EventType`, a `Key`, and a `Time` value.
-- **Set<T>**: a generic set of elements of the same type.
-- **List<T>**: a generic list of elements of the same type.
+- **Set\<T\>**: a generic set of elements of the same type.
+- **List\<T\>**: a generic list of elements of the same type.
 - **Map<K, V>**: a generic map of key-value pairs.
 - **Tuple<I, J, K, ...>**: a tuple of elements of potentially different types.
 - **Node**: a stream processing node.
@@ -195,7 +195,7 @@ node Example {
         release "b"
 
         # Emit the event using the same type, which is either "press" or "release".
-        emit event.type(event.key)
+        emit event.type("c")
     }
 }
 ```
