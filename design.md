@@ -61,9 +61,9 @@ Event records are immutable.
 
 Types of events:
 
-- Key press: `type = "press"`
-- Key release: `type = "release"`
-- Clock tick: `type = "tick"`
+- Key press: `type = press`
+- Key release: `type = release`
+- Clock tick: `type = tick`
 
 A new clock tick events fires once every 1ms.
 
@@ -832,13 +832,13 @@ node ComboEngine {
         last_release_time = 0
 
         for event in state.buffer {
-            if event.type == "press" {
+            if event.type == press {
                 pressed_keys << event.key
                 if first_press_time == 0 {
                     first_press_time = event.time
                 }
                 last_press_time = event.time
-            } else if event.type == "release" {
+            } else if event.type == release {
                 if first_release_time == 0 {
                     first_release_time = event.time
                 }
@@ -874,9 +874,9 @@ node ComboEngine {
     function flush_buffer() {
         # Replay all buffered events as-is
         for event in state.buffer {
-            if event.type == "press" {
+            if event.type == press {
                 press event.key
-            } else if event.type == "release" {
+            } else if event.type == release {
                 release event.key
             }
         }

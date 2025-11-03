@@ -32,8 +32,6 @@ keywords = [
     'not',
     'on',
     'or',
-    'press',
-    'release',
     'return',
     'then',
     'to',
@@ -145,11 +143,11 @@ class State {
 ## Statements.
 
 Statement = (
-    Variable
+    Operate
+    | Variable
     | Assign
     | Emit
     | For
-    | Operate
     | Return
     | ValueExpression
 )
@@ -339,7 +337,7 @@ class MatchCase {
     body: Block(Statement)
 }
 
-clase FallbackCase {
+class FallbackCase {
     pass kw("else")
     guard: Opt(kw("if") >> ValueExpression)
     body: Block(Statement)
